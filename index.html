@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AR.js 3D Model Interaction</title>
+    <title>AR.js Cube Interaction</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/dist/gestures.js"></script>
@@ -22,16 +22,6 @@
         cursor: pointer;
         z-index: 1000;
       }
-      #error-message {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        color: red;
-        background-color: rgba(255, 255, 255, 0.7);
-        padding: 5px;
-        border-radius: 5px;
-        z-index: 1000;
-      }
     </style>
   </head>
   <body style="margin: 0; overflow: hidden;">
@@ -43,40 +33,25 @@
       gesture-detector
       id="scene"
     >
-      <a-assets>
-        <a-asset-item id="model-asset" src="/model/fireside.glb"></a-asset-item>
-      </a-assets>
-
-      <a-entity
-        id="model"
-        gltf-model="#model-asset"
+      <a-box
+        id="ar-cube"
+        color="#00FF00"
         scale="0.1 0.1 0.1"
         position="0 0 -1"
         rotation="0 0 0"
         gesture-handler="minScale: 0.025; maxScale: 10"
         visible="false"
-      ></a-entity>
+      ></a-box>
 
       <a-entity camera look-controls position="0 1.6 0"></a-entity>
     </a-scene>
-    <button class="ar-button" id="place-button">Place Model</button>
-    <div id="error-message"></div>
+    <button class="ar-button" id="place-button">Place Cube</button>
     <script>
       window.addEventListener('load', () => {
         const sceneEl = document.querySelector('a-scene');
-        const modelEl = document.querySelector('#model');
+        const cubeEl = document.querySelector('#ar-cube');
         const placeButton = document.querySelector('#place-button');
-        const errorMessage = document.querySelector('#error-message');
         let isPlaced = false;
-
-        modelEl.addEventListener('model-loaded', () => {
-          console.log('Model loaded successfully');
-        });
-
-        modelEl.addEventListener('model-error', (error) => {
-          console.error('Error loading model:', error);
-          errorMessage.textContent = 'Error loading 3D model. Please check the file path and try again.';
-        });
 
         placeButton.addEventListener('click', () => {
           if (!isPlaced) {
@@ -84,18 +59,23 @@
             const worldPos = new THREE.Vector3();
             worldPos.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
             worldPos.z -= 1; // Place 1 meter in front of the camera
-            modelEl.setAttribute('position', worldPos);
-            modelEl.setAttribute('visible', true);
+            cubeEl.setAttribute('position', worldPos);
+            cubeEl.setAttribute('visible', true);
             isPlaced = true;
-            placeButton.textContent = 'Reset Model';
+            placeButton.textContent = 'Reset Cube';
           } else {
-            modelEl.setAttribute('position', '0 0 -1');
-            modelEl.setAttribute('rotation', '0 0 0');
-            modelEl.setAttribute('scale', '0.1 0.1 0.1');
-            modelEl.setAttribute('visible', false);
+            cubeEl.setAttribute('position', '0 0 -1');
+            cubeEl.setAttribute('rotation', '0 0 0');
+            cubeEl.setAttribute('scale', '0.1 0.1 0.1');
+            cubeEl.setAttribute('visible', false);
             isPlaced = false;
-            placeButton.textContent = 'Place Model';
+            placeButton.textContent = 'Place Cube';
           }
+        });
+
+        // Log when AR.js is ready
+        sceneEl.addEventListener('arjs-nft-loaded', () => {
+          console.log('AR.js initialized and ready');
         });
       });
     </script>
