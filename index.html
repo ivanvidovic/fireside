@@ -27,50 +27,38 @@
   <body style="margin: 0; overflow: hidden;">
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false;"
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
       renderer="logarithmicDepthBuffer: true;"
       vr-mode-ui="enabled: false"
       gesture-detector
       id="scene"
     >
-      <a-box
-        id="ar-cube"
-        color="#00FF00"
-        scale="0.1 0.1 0.1"
-        position="0 0 -1"
-        rotation="0 0 0"
-        gesture-handler="minScale: 0.025; maxScale: 10"
-        visible="false"
-      ></a-box>
+      <a-marker type="barcode" value="1">
+        <a-box
+          id="ar-cube"
+          color="#00FF00"
+          scale="0.5 0.5 0.5"
+          position="0 0.25 0"
+          rotation="0 0 0"
+          gesture-handler="minScale: 0.25; maxScale: 3"
+        ></a-box>
+      </a-marker>
 
-      <a-entity camera look-controls position="0 1.6 0"></a-entity>
+      <a-entity camera></a-entity>
     </a-scene>
-    <button class="ar-button" id="place-button">Place Cube</button>
+    <div class="ar-button" id="instructions">Scan a 3x3 barcode marker with value 1</div>
     <script>
       window.addEventListener('load', () => {
         const sceneEl = document.querySelector('a-scene');
         const cubeEl = document.querySelector('#ar-cube');
-        const placeButton = document.querySelector('#place-button');
-        let isPlaced = false;
+        const instructionsEl = document.querySelector('#instructions');
 
-        placeButton.addEventListener('click', () => {
-          if (!isPlaced) {
-            const cameraEl = document.querySelector('[camera]');
-            const worldPos = new THREE.Vector3();
-            worldPos.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
-            worldPos.z -= 1; // Place 1 meter in front of the camera
-            cubeEl.setAttribute('position', worldPos);
-            cubeEl.setAttribute('visible', true);
-            isPlaced = true;
-            placeButton.textContent = 'Reset Cube';
-          } else {
-            cubeEl.setAttribute('position', '0 0 -1');
-            cubeEl.setAttribute('rotation', '0 0 0');
-            cubeEl.setAttribute('scale', '0.1 0.1 0.1');
-            cubeEl.setAttribute('visible', false);
-            isPlaced = false;
-            placeButton.textContent = 'Place Cube';
-          }
+        sceneEl.addEventListener('markerFound', () => {
+          instructionsEl.style.display = 'none';
+        });
+
+        sceneEl.addEventListener('markerLost', () => {
+          instructionsEl.style.display = 'block';
         });
 
         // Log when AR.js is ready
