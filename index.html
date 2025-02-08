@@ -20,6 +20,17 @@
         border-radius: 5px;
         font-size: 16px;
         cursor: pointer;
+        z-index: 1000;
+      }
+      #error-message {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: red;
+        background-color: rgba(255, 255, 255, 0.7);
+        padding: 5px;
+        border-radius: 5px;
+        z-index: 1000;
       }
     </style>
   </head>
@@ -32,51 +43,59 @@
       gesture-detector
       id="scene"
     >
-      <a-marker preset="hiro" smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
-        <a-entity
-          id="model"
-          gltf-model="/model/fireside.glb"
-          scale="1 1 1"
-          position="0 0 0"
-          rotation="0 0 0"
-          gesture-handler="minScale: 0.25; maxScale: 10"
-        ></a-entity>
-      </a-marker>
-      <a-entity camera></a-entity>
+      <a-assets>
+        <a-asset-item id="model-asset" src="/model/fireside.glb"></a-asset-item>
+      </a-assets>
+
+      <a-entity
+        id="model"
+        gltf-model="#model-asset"
+        scale="0.1 0.1 0.1"
+        position="0 0 -1"
+        rotation="0 0 0"
+        gesture-handler="minScale: 0.025; maxScale: 10"
+        visible="false"
+      ></a-entity>
+
+      <a-entity camera look-controls position="0 1.6 0"></a-entity>
     </a-scene>
     <button class="ar-button" id="place-button">Place Model</button>
+    <div id="error-message"></div>
     <script>
       window.addEventListener('load', () => {
         const sceneEl = document.querySelector('a-scene');
         const modelEl = document.querySelector('#model');
         const placeButton = document.querySelector('#place-button');
+        const errorMessage = document.querySelector('#error-message');
         let isPlaced = false;
+
+        modelEl.addEventListener('model-loaded', () => {
+          console.log('Model loaded successfully');
+        });
+
+        modelEl.addEventListener('model-error', (error) => {
+          console.error('Error loading model:', error);
+          errorMessage.textContent = 'Error loading 3D model. Please check the file path and try again.';
+        });
 
         placeButton.addEventListener('click', () => {
           if (!isPlaced) {
             const cameraEl = document.querySelector('[camera]');
             const worldPos = new THREE.Vector3();
             worldPos.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
-            worldPos.y -= 0.5; // Place slightly below the camera
+            worldPos.z -= 1; // Place 1 meter in front of the camera
             modelEl.setAttribute('position', worldPos);
             modelEl.setAttribute('visible', true);
             isPlaced = true;
             placeButton.textContent = 'Reset Model';
           } else {
-            modelEl.setAttribute('position', '0 0 0');
+            modelEl.setAttribute('position', '0 0 -1');
             modelEl.setAttribute('rotation', '0 0 0');
-            modelEl.setAttribute('scale', '1 1 1');
+            modelEl.setAttribute('scale', '0.1 0.1 0.1');
+            modelEl.setAttribute('visible', false);
             isPlaced = false;
             placeButton.textContent = 'Place Model';
           }
-        });
-
-        sceneEl.addEventListener('markerFound', () => {
-          placeButton.style.display = 'none';
-        });
-
-        sceneEl.addEventListener('markerLost', () => {
-          placeButton.style.display = 'block';
         });
       });
     </script>
