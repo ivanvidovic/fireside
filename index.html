@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Cube with WebXR Support</title>
+    <title>Simple WebXR AR Cube</title>
     <style>
         body { margin: 0; overflow: hidden; }
         #ar-button {
@@ -25,104 +25,176 @@
     <canvas id="ar-canvas"></canvas>
     <button id="ar-button">Start AR</button>
 
-    <script type="module">
-        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
-
-        let camera, scene, renderer, cube;
+    <script>
+        let xrSession = null;
         let xrRefSpace = null;
+        let gl = null;
+        let cube = null;
 
         const button = document.getElementById('ar-button');
+        button.addEventListener('click', activateAR);
 
-        function init() {
-            const canvas = document.getElementById('ar-canvas');
-            scene = new THREE.Scene();
-
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-            camera.position.z = 1;
-
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-            scene.add(light);
-
-            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-
-            const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-            cube = new THREE.Mesh(geometry, material);
-            scene.add(cube);
-
-            if ('xr' in navigator) {
-                button.addEventListener('click', onStartAR);
-                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-                    if (supported) {
-                        button.textContent = 'Start AR';
-                        button.disabled = false;
-                    } else {
-                        button.textContent = 'AR Not Supported';
-                        button.disabled = true;
-                    }
-                });
-            } else {
-                button.textContent = 'AR Not Supported';
-                button.disabled = true;
+        async function activateAR() {
+            if (!navigator.xr) {
+                alert("WebXR not available");
+                return;
             }
 
-            animate();
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.01;
-            renderer.render(scene, camera);
-        }
-
-        async function onStartAR() {
             try {
-                const session = await navigator.xr.requestSession("immersive-ar", {
-                    requiredFeatures: ['hit-test']
+                xrSession = await navigator.xr.requestSession("immersive-ar", {
+                    requiredFeatures: ['hit-test', 'local-floor']
                 });
 
-                session.addEventListener('end', onSessionEnded);
-                renderer.xr.enabled = true;
-                renderer.xr.setSession(session);
-                button.style.display = 'none';
+                const canvas = document.getElementById('ar-canvas');
+                gl = canvas.getContext('webgl', { xrCompatible: true });
 
-                xrRefSpace = await session.requestReferenceSpace('local');
-                session.requestAnimationFrame(onXRFrame);
-            } catch (e) {
-                console.error("Error starting AR session:", e);
-                alert("Failed to start AR session. This might be due to lack of AR support on your device.");
+                xrSession.updateRenderState({
+                    baseLayer: new XRWebGLLayer(xrSession, gl)
+                });
+
+                xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+
+                xrSession.addEventListener('end', onSessionEnded);
+
+                cube = createCube(gl);
+
+                xrSession.requestAnimationFrame(onXRFrame);
+
+                button.style.display = 'none';
+            } catch (error) {
+                console.error("Error starting AR session:", error);
+                alert("Failed to start AR. Make sure you're using a compatible device and browser.");
             }
+        }
+
+        function createCube(gl) {
+            const vertices = [
+                -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  0.5,  0.5, -0.5, -0.5,  0.5, -0.5,
+                -0.5, -0.5,  0.5,  0.5, -0.5,  0.5,  0.5,  0.5,  0.5, -0.5,  0.5,  0.5,
+            ];
+
+            const indices = [
+                0, 1, 2, 0, 2, 3, 1, 5, 6, 1, 6, 2, 5, 4, 7, 5, 7, 6,
+                4, 0, 3, 4, 3, 7, 3, 2, 6, 3, 6, 7, 4, 5, 1, 4, 1, 0
+            ];
+
+            const vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            const indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+            const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertexShader, `
+                attribute vec3 position;
+                uniform mat4 modelViewMatrix;
+                uniform mat4 projectionMatrix;
+                void main() {
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `);
+            gl.compileShader(vertexShader);
+
+            const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragmentShader, `
+                precision mediump float;
+                void main() {
+                    gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+                }
+            `);
+            gl.compileShader(fragmentShader);
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+
+            return {
+                program: program,
+                vertexBuffer: vertexBuffer,
+                indexBuffer: indexBuffer,
+                count: indices.length
+            };
         }
 
         function onXRFrame(time, frame) {
-            const session = frame.session;
-            session.requestAnimationFrame(onXRFrame);
+            xrSession.requestAnimationFrame(onXRFrame);
 
             const pose = frame.getViewerPose(xrRefSpace);
             if (pose) {
                 const view = pose.views[0];
-                const viewMatrix = new THREE.Matrix4().fromArray(view.transform.matrix);
-                cube.position.setFromMatrixPosition(viewMatrix);
-                cube.position.z -= 0.3;
-            }
+                const viewport = xrSession.renderState.baseLayer.getViewport(view);
+                gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-            renderer.render(scene, camera);
+                gl.useProgram(cube.program);
+
+                const projectionMatrix = view.projectionMatrix;
+                const viewMatrix = view.transform.inverse.matrix;
+
+                const modelViewMatrix = new Float32Array(16);
+                const identity = new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, -0.5, 1
+                ]);
+                multiplyMatrices(modelViewMatrix, viewMatrix, identity);
+
+                const projectionUniform = gl.getUniformLocation(cube.program, "projectionMatrix");
+                const modelViewUniform = gl.getUniformLocation(cube.program, "modelViewMatrix");
+
+                gl.uniformMatrix4fv(projectionUniform, false, projectionMatrix);
+                gl.uniformMatrix4fv(modelViewUniform, false, modelViewMatrix);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, cube.vertexBuffer);
+                const positionAttribute = gl.getAttribLocation(cube.program, "position");
+                gl.enableVertexAttribArray(positionAttribute);
+                gl.vertexAttribPointer(positionAttribute, 3, gl.FLOAT, false, 0, 0);
+
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cube.indexBuffer);
+                gl.drawElements(gl.TRIANGLES, cube.count, gl.UNSIGNED_SHORT, 0);
+            }
         }
 
         function onSessionEnded() {
+            xrSession = null;
+            gl = null;
             button.style.display = 'block';
         }
 
-        init();
+        function multiplyMatrices(out, a, b) {
+            let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+            let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+            let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+            let a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+            let b0  = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
+            out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+            out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+            out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+            out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+            b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7];
+            out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+            out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+            out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+            out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+            b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11];
+            out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+            out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+            out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+            out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+            b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15];
+            out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+            out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+            out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+            out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+            return out;
+        }
     </script>
 </body>
 </html>
