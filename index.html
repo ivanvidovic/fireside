@@ -1,87 +1,99 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AR.js Markerless Cube Interaction</title>
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-    <script src="https://raw.githack.com/fcor/arjs-gestures/master/dist/gestures.js"></script>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple WebXR AR Cube</title>
     <style>
-      .ar-button {
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 10px 20px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        font-size: 16px;
-        cursor: pointer;
-        z-index: 1000;
-      }
+        body { margin: 0; }
+        #ar-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
     </style>
-  </head>
-  <body style="margin: 0; overflow: hidden;">
-    <a-scene
-      vr-mode-ui="enabled: false"
-      embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;"
-      renderer="logarithmicDepthBuffer: true;"
-      gesture-detector
-    >
-      <a-entity
-        id="ar-cube"
-        geometry="primitive: box"
-        material="color: #00FF00"
-        scale="0.5 0.5 0.5"
-        position="0 0 -3"
-        rotation="0 0 0"
-        gesture-handler="minScale: 0.25; maxScale: 3"
-        visible="false"
-      ></a-entity>
+</head>
+<body>
+    <canvas id="ar-canvas"></canvas>
+    <button id="ar-button">Start AR</button>
 
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    </a-scene>
-    <button class="ar-button" id="place-button">Place Cube</button>
-    <script>
-      window.addEventListener('load', () => {
-        const cubeEl = document.querySelector('#ar-cube');
-        const placeButton = document.querySelector('#place-button');
-        let isPlaced = false;
+    <script type="module">
+        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
 
-        placeButton.addEventListener('click', () => {
-          if (!isPlaced) {
-            cubeEl.setAttribute('visible', true);
-            isPlaced = true;
-            placeButton.textContent = 'Reset Cube';
-          } else {
-            cubeEl.setAttribute('position', '0 0 -3');
-            cubeEl.setAttribute('rotation', '0 0 0');
-            cubeEl.setAttribute('scale', '0.5 0.5 0.5');
-            isPlaced = false;
-            placeButton.textContent = 'Place Cube';
-          }
-        });
+        let camera, scene, renderer, cube;
+        let xrRefSpace = null;
 
-        // Custom gesture handler to move the cube in 3D space
-        const scene = document.querySelector('a-scene');
-        scene.addEventListener('touchmove', (event) => {
-          if (isPlaced && event.touches.length === 1) {
-            const touch = event.touches[0];
-            const rect = event.target.getBoundingClientRect();
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
-            const pos = cubeEl.getAttribute('position');
-            pos.x = (x / rect.width) * 4 - 2;  // Map x to range -2 to 2
-            pos.y = -(y / rect.height) * 4 + 2;  // Map y to range 2 to -2
-            cubeEl.setAttribute('position', pos);
-          }
-        });
-      });
+        const button = document.getElementById('ar-button');
+
+        function init() {
+            const canvas = document.getElementById('ar-canvas');
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            scene.add(light);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+
+            const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+
+            button.addEventListener('click', onStartAR);
+        }
+
+        async function onStartAR() {
+            if (!navigator.xr) {
+                alert("WebXR not available");
+                return;
+            }
+
+            const session = await navigator.xr.requestSession("immersive-ar", {
+                requiredFeatures: ['hit-test', 'local-floor']
+            });
+
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setSession(session);
+            button.style.display = 'none';
+
+            xrRefSpace = await session.requestReferenceSpace('local-floor');
+            session.requestAnimationFrame(onXRFrame);
+        }
+
+        function onXRFrame(time, frame) {
+            const session = frame.session;
+            session.requestAnimationFrame(onXRFrame);
+
+            const pose = frame.getViewerPose(xrRefSpace);
+            if (pose) {
+                const view = pose.views[0];
+                const viewMatrix = new THREE.Matrix4().fromArray(view.transform.matrix);
+                cube.position.setFromMatrixPosition(viewMatrix);
+                cube.position.z -= 0.3; // Place the cube 0.3 meters in front of the camera
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onSessionEnded() {
+            button.style.display = 'block';
+        }
+
+        init();
     </script>
-  </body>
+</body>
 </html>
 
