@@ -1,0 +1,68 @@
+body { 
+    margin: 0; 
+    overflow: hidden; 
+    background-color: #000; 
+}
+
+#canvas-container { 
+    width: 100vw; 
+    height: 100vh; 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    z-index: 1; 
+}
+
+#ui-layer {
+    position: absolute; 
+    bottom: 30px; 
+    width: 100%; 
+    display: flex;
+    justify-content: center;
+    z-index: 10; 
+    pointer-events: none; 
+}
+
+.ig-link {
+    display: inline-block; 
+    pointer-events: auto;
+    /* The parent continuously cycles the colors silently in the background */
+    animation: neon-sweep 1.5s infinite alternate ease-in-out;
+}
+
+/* We animate the stroke and text color on the parent link. 
+  The SVG will tap into these smoothly when hovered.
+*/
+@keyframes neon-sweep {
+    0% {
+        stroke: #ff00ff; /* Magenta icon */
+        color: #00ff33;  /* Green glow */
+    }
+    100% {
+        stroke: #00ff33; /* Green icon */
+        color: #ff00ff;  /* Magenta glow */
+    }
+}
+
+.ig-link svg {
+    /* Increased by 20% from 22px */
+    width: 30px;
+    height: 30px;
+    
+    /* Base State */
+    stroke: rgba(255, 255, 255, 0.4); 
+    fill: none;
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 0px rgba(255, 255, 255, 0)); /* Hidden glow */
+    
+    /* Smooth transition for fading in AND fading out */
+    transition: stroke 0.5s ease, filter 0.5s ease;
+}
+
+.ig-link:hover svg {
+    /* Inherits the currently animating stroke color from the parent */
+    stroke: inherit; 
+    
+    /* Uses 'currentColor' to grab the animating glow color from the parent */
+    filter: drop-shadow(0 0 8px currentColor);
+}
