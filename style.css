@@ -2,6 +2,12 @@ body {
     margin: 0; 
     overflow: hidden; 
     background-color: #000; 
+    
+    /* MOBILE FIX: Disables text highlighting, selection boxes, and long-press menus */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 #canvas-container { 
@@ -11,6 +17,9 @@ body {
     top: 0; 
     left: 0; 
     z-index: 1; 
+    
+    /* MOBILE FIX: Forces the browser to hand all touch events directly to your JS */
+    touch-action: none;
 }
 
 #ui-layer {
@@ -67,18 +76,16 @@ body {
     filter: drop-shadow(0 0 30px currentColor);
 }
 
-/* --- ACTIVE MIC STATE --- */
 #mic-btn.active svg {
-    animation: none; /* Stop color sweeping */
-    stroke: #00ff33; /* Lock to green */
+    animation: none; 
+    stroke: #00ff33; 
     filter: drop-shadow(0 0 15px #00ff33);
 }
 #mic-btn.active::after {
-    content: "Listening..."; /* Update tooltip text when active */
+    content: "Listening..."; 
     color: #00ff33;
 }
 
-/* --- TOOLTIP STYLING --- */
 .social-link::after {
     content: attr(data-tooltip); 
     position: absolute;

@@ -35,7 +35,14 @@ const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.inner
 
 const composer = new EffectComposer(renderer, renderTarget);
 const renderScene = new RenderPass(scene, camera);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.3, 1.0, 0.05);
+
+// --- MOBILE BLOOM LOGIC ---
+// If the screen is mobile-sized, heavily reduce bloom strength and raise the threshold
+const isMobile = window.innerWidth <= 768;
+const bloomStrength = isMobile ? 0.12 : 0.3;
+const bloomThreshold = isMobile ? 0.1 : 0.05;
+
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, 1.0, bloomThreshold);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
@@ -184,7 +191,6 @@ const offsetVelShader = `
         float burstForce = uBurst * aRand.x * 2.5;
         basePos += normalize(startPos) * burstForce * (1.0 - normalizedAge);
 
-        // MATCHING BASE GRAVITY
         float fireY = age * 3.0;
         float sporeY = -age * 0.4;
         basePos.y += mix(fireY, sporeY, uSporeBlend);
@@ -201,7 +207,6 @@ const offsetVelShader = `
         if (basePos.y > orbRadius) basePos.xz *= mix(taperTop, 1.0, uSporeBlend);
         if (basePos.y < -orbRadius) basePos.xz *= mix(1.0, taperBot, uSporeBlend);
 
-        // MATCHING BASE WIND
         float fx = sin(basePos.y * 1.2 + uTime * -1.5) * 0.4;
         float fz = cos(basePos.y * -2.1 + uTime * 5.3) * 0.4;
         float sx = sin(basePos.y * 3.0 + uTime * 0.5) * 0.5;
@@ -212,7 +217,6 @@ const offsetVelShader = `
         vec3 actualPos = basePos + offsetPos;
         float individualStrength = mix(0.4, 1.0, fract(aRand.y * 11.7));
 
-        // --- MOUSE FORCES ---
         float distToMouse = length(actualPos - uMouse3D);
         float mouseForce = smoothstep(4.5, 0.0, distToMouse);
         vec3 repulseDir = actualPos - uMouse3D;
@@ -221,7 +225,6 @@ const offsetVelShader = `
         repulseDir.y += 0.8;
         if (length(repulseDir) < 0.01) repulseDir = vec3(0.0, 1.0, 0.0);
         
-        // MOUSE PHYSICS: Weakened for Spores so they drift gently
         float curRepulse = mix(16.0, 4.0, uSporeBlend);
         vec3 repulsion = normalize(repulseDir) * mouseForce * curRepulse * individualStrength; 
 
@@ -234,7 +237,6 @@ const offsetVelShader = `
         vec3 dragDir = rawSpeed > 0.0001 ? normalize(uMouseVel) : vec3(0.0);
         vec3 drag = dragDir * boostedSpeed * dragForce * individualStrength;
 
-        // --- AUDIO REACTIVE FORCES ---
         float distToCenter = length(actualPos);
         float kickForce = exp(-distToCenter * 1.5) * uAudioLow * 120.0; 
         vec3 kickDir = actualPos;
@@ -252,7 +254,6 @@ const offsetVelShader = `
         
         offsetVel += addedForce;
 
-        // FLUID ENVIRONMENT: Weak Spore Spring allows free drifting
         float curSpring = mix(3.5, 0.3, uSporeBlend);
         vec3 springForce = -offsetPos * curSpring;
         offsetVel += springForce * dt;
@@ -350,7 +351,6 @@ const pMat = new THREE.ShaderMaterial({
             float burstForce = uBurst * aRand.x * 2.5;
             basePos += normalize(startPos) * burstForce * (1.0 - normalizedAge);
 
-            // MATCHING BASE GRAVITY
             float fireY = age * 3.0;
             float sporeY = -age * 0.4;
             basePos.y += mix(fireY, sporeY, uSporeBlend);
@@ -367,7 +367,6 @@ const pMat = new THREE.ShaderMaterial({
             if (basePos.y > orbRadius) basePos.xz *= mix(taperTop, 1.0, uSporeBlend);
             if (basePos.y < -orbRadius) basePos.xz *= mix(1.0, taperBot, uSporeBlend);
 
-            // MATCHING BASE WIND
             float fx = sin(basePos.y * 1.2 + uTime * -1.5) * 0.4;
             float fz = cos(basePos.y * -2.1 + uTime * 5.3) * 0.4;
             float sx = sin(basePos.y * 3.0 + uTime * 0.5) * 0.5;
@@ -382,8 +381,6 @@ const pMat = new THREE.ShaderMaterial({
             gl_Position = projectionMatrix * mvPosition;
             
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
-            
-            // DELICATE DUST MOTES: Pulled size multiplier down from 0.5 to 0.1
             float sizeMultiplier = mix(1.0, 0.1, uSporeBlend);
             gl_PointSize = (100.0 * aRand.x + 300.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z) * sizeMultiplier;
 
@@ -618,6 +615,11 @@ function animate() {
 }
 
 window.addEventListener('resize', () => {
+    // --- MOBILE BLOOM DYNAMIC UPDATE ---
+    const isMobileResize = window.innerWidth <= 768;
+    bloomPass.strength = isMobileResize ? 0.12 : 0.3;
+    bloomPass.threshold = isMobileResize ? 0.1 : 0.05;
+
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
