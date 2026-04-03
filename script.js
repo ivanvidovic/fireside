@@ -37,9 +37,8 @@ const composer = new EffectComposer(renderer, renderTarget);
 const renderScene = new RenderPass(scene, camera);
 
 // --- MOBILE BLOOM LOGIC ---
-// If the screen is mobile-sized, heavily reduce bloom strength and raise the threshold
 const isMobile = window.innerWidth <= 768;
-const bloomStrength = isMobile ? 0.12 : 0.3;
+const bloomStrength = isMobile ? 0.084 : 0.21;
 const bloomThreshold = isMobile ? 0.1 : 0.05;
 
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, 1.0, bloomThreshold);
@@ -79,42 +78,6 @@ const orb = new THREE.Mesh(
     })
 );
 scene.add(orb);
-
-// --- AUDIO REACTIVE SETUP ---
-let audioCtx, analyser, dataArray, mediaStream;
-let isAudioActive = false;
-let smoothedLow = 0;
-let smoothedHigh = 0;
-
-const micBtn = document.getElementById('mic-btn');
-micBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    
-    if (isAudioActive) {
-        if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
-        if (audioCtx) audioCtx.close(); 
-        isAudioActive = false;
-        micBtn.classList.remove('active');
-        return;
-    } 
-
-    try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioCtx.createMediaStreamSource(mediaStream);
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256; 
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        isAudioActive = true;
-        micBtn.classList.add('active');
-    } catch (err) {
-        console.error('Mic access denied:', err);
-        alert('Microphone access is required to use the Audio Reactive mode.');
-    }
-});
-
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
 const WIDTH = 64;
@@ -160,13 +123,16 @@ const offsetVelShader = `
     uniform float uTime;
     uniform float dt;
     uniform float uBurst;
-    uniform float uSporeBlend;
-    uniform float uAudioLow;  
-    uniform float uAudioHigh; 
     uniform vec3 uMouse3D;
     uniform vec3 uMouseVel;
     uniform sampler2D tBaseInfo1; 
     uniform sampler2D tBaseInfo2; 
+
+    vec3 getWind(vec3 p, float t) {
+        float x = sin(p.y * 1.2 + t * -1.5) * 0.4;
+        float z = cos(p.y * -2.1 + t * 5.3) * 0.4;
+        return vec3(x, -1.0, z);
+    }
 
     void main() {
         vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -184,39 +150,31 @@ const offsetVelShader = `
         float age = mod(uTime + timeOffset, maxLife);
         float normalizedAge = age / maxLife;
 
-        float sRad = mix(1.25, 2.0, uSporeBlend);
-        vec3 startPos = normalize(aStartXYZ) * sRad;
+        vec3 startPos = normalize(aStartXYZ) * 1.25;
         vec3 basePos = startPos;
         
         float burstForce = uBurst * aRand.x * 2.5;
         basePos += normalize(startPos) * burstForce * (1.0 - normalizedAge);
 
-        float fireY = age * 3.0;
-        float sporeY = -age * 0.4;
-        basePos.y += mix(fireY, sporeY, uSporeBlend);
+        basePos.y += age * 3.0;
 
         float orbRadius = 1.0;
-        if (basePos.y > -orbRadius && basePos.y < orbRadius) {
+        if (basePos.y < orbRadius) {
             float surfaceDist = sqrt(max(0.0, orbRadius*orbRadius - basePos.y*basePos.y));
             if (length(basePos.xz) < surfaceDist) {
                 basePos.xz = normalize(basePos.xz) * surfaceDist;
             }
         }
-        float taperTop = exp(-(basePos.y - orbRadius) * 0.5);
-        float taperBot = exp(-(-basePos.y - orbRadius) * 1.5);
-        if (basePos.y > orbRadius) basePos.xz *= mix(taperTop, 1.0, uSporeBlend);
-        if (basePos.y < -orbRadius) basePos.xz *= mix(1.0, taperBot, uSporeBlend);
+        if (basePos.y > orbRadius) {
+            basePos.xz *= exp(-(basePos.y - orbRadius) * 0.5);
+        }
 
-        float fx = sin(basePos.y * 1.2 + uTime * -1.5) * 0.4;
-        float fz = cos(basePos.y * -2.1 + uTime * 5.3) * 0.4;
-        float sx = sin(basePos.y * 3.0 + uTime * 0.5) * 0.5;
-        float sz = cos(basePos.y * -2.8 + uTime * 0.6) * 0.5;
-        vec3 wind = vec3(mix(fx, sx, uSporeBlend), mix(-1.0, 0.0, uSporeBlend), mix(fz, sz, uSporeBlend));
-        basePos += wind * age * mix(1.5, 0.5, uSporeBlend);
+        basePos += getWind(basePos, uTime) * age * 1.5;
 
         vec3 actualPos = basePos + offsetPos;
         float individualStrength = mix(0.4, 1.0, fract(aRand.y * 11.7));
 
+        // --- ENHANCED NON-LINEAR FLUID MECHANICS ---
         float distToMouse = length(actualPos - uMouse3D);
         float mouseForce = smoothstep(4.5, 0.0, distToMouse);
         vec3 repulseDir = actualPos - uMouse3D;
@@ -225,41 +183,24 @@ const offsetVelShader = `
         repulseDir.y += 0.8;
         if (length(repulseDir) < 0.01) repulseDir = vec3(0.0, 1.0, 0.0);
         
-        float curRepulse = mix(16.0, 4.0, uSporeBlend);
-        vec3 repulsion = normalize(repulseDir) * mouseForce * curRepulse * individualStrength; 
+        vec3 repulsion = normalize(repulseDir) * mouseForce * 18.0 * individualStrength; 
 
         float dragForce = smoothstep(5.5, 0.0, distToMouse);
         float rawSpeed = length(uMouseVel);
         
-        float curDrag = mix(25.0, 6.0, uSporeBlend);
-        float boostedSpeed = pow(rawSpeed, 0.4) * curDrag; 
+        float boostedSpeed = pow(rawSpeed, 0.4) * 25.0; 
         
         vec3 dragDir = rawSpeed > 0.0001 ? normalize(uMouseVel) : vec3(0.0);
         vec3 drag = dragDir * boostedSpeed * dragForce * individualStrength;
 
-        float distToCenter = length(actualPos);
-        float kickForce = exp(-distToCenter * 1.5) * uAudioLow * 120.0; 
-        vec3 kickDir = actualPos;
-        if (length(kickDir) < 0.01) kickDir = vec3(0.0, 1.0, 0.0);
-        vec3 audioKick = normalize(kickDir) * kickForce * individualStrength;
-
-        vec3 audioJitter = vec3(
-            sin(uTime * 25.0 + aRand.x * 50.0),
-            cos(uTime * 27.0 + aRand.y * 50.0),
-            sin(uTime * 23.0 + aRand.z * 50.0)
-        ) * uAudioHigh * 30.0 * individualStrength;
-
-        vec3 addedForce = (repulsion + drag + audioKick + audioJitter) * dt;
+        vec3 addedForce = (repulsion + drag) * dt;
         addedForce = clamp(addedForce, vec3(-100.0), vec3(100.0));
         
         offsetVel += addedForce;
 
-        float curSpring = mix(3.5, 0.3, uSporeBlend);
-        vec3 springForce = -offsetPos * curSpring;
+        vec3 springForce = -offsetPos * 3.5;
         offsetVel += springForce * dt;
-
-        float curFric = mix(5.0, 2.5, uSporeBlend);
-        offsetVel *= exp(-curFric * dt);
+        offsetVel *= exp(-5.0 * dt);
 
         gl_FragColor = vec4(offsetVel, 1.0);
     }
@@ -284,9 +225,6 @@ gpuCompute.setVariableDependencies(posVar, [velVar, posVar]);
 velVar.material.uniforms.uTime = { value: 0 };
 velVar.material.uniforms.dt = { value: 0 };
 velVar.material.uniforms.uBurst = { value: 0 };
-velVar.material.uniforms.uSporeBlend = { value: 0 };
-velVar.material.uniforms.uAudioLow = { value: 0 };
-velVar.material.uniforms.uAudioHigh = { value: 0 };
 velVar.material.uniforms.uMouse3D = { value: new THREE.Vector3(999,999,999) };
 velVar.material.uniforms.uMouseVel = { value: new THREE.Vector3(0,0,0) };
 velVar.material.uniforms.tBaseInfo1 = { value: dtBaseInfo1 };
@@ -316,7 +254,6 @@ const pMat = new THREE.ShaderMaterial({
         uTime: { value: 0 }, 
         uTexture: { value: new THREE.CanvasTexture(canvas) },
         uBurst: { value: 0.0 },
-        uSporeBlend: { value: 0.0 },
         uHtSize: { value: HALFTONE_CONFIG.size },
         uHtRotation: { value: HALFTONE_CONFIG.rotation },
         uHtShape: { value: HALFTONE_CONFIG.shape },
@@ -328,7 +265,6 @@ const pMat = new THREE.ShaderMaterial({
     vertexShader: `
         uniform float uTime;
         uniform float uBurst;
-        uniform float uSporeBlend;
         uniform sampler2D tOffsetPos;
         
         attribute vec2 aUv;
@@ -337,6 +273,12 @@ const pMat = new THREE.ShaderMaterial({
         varying float vAlpha;
         varying vec3 vColor;
 
+        vec3 getWind(vec3 p, float t) {
+            float x = sin(p.y * 1.2 + t * -1.5) * 0.4;
+            float z = cos(p.y * -2.1 + t * 5.3) * 0.4;
+            return vec3(x, -1.0, z);
+        }
+
         void main() {
             vec3 aStartXYZ = position;
             
@@ -344,35 +286,26 @@ const pMat = new THREE.ShaderMaterial({
             float age = mod(uTime + aTimeOffset, maxLife);
             float normalizedAge = age / maxLife;
 
-            float sRad = mix(1.25, 2.0, uSporeBlend);
-            vec3 startPos = normalize(aStartXYZ) * sRad;
+            vec3 startPos = normalize(aStartXYZ) * 1.25;
             vec3 basePos = startPos;
             
             float burstForce = uBurst * aRand.x * 2.5;
             basePos += normalize(startPos) * burstForce * (1.0 - normalizedAge);
 
-            float fireY = age * 3.0;
-            float sporeY = -age * 0.4;
-            basePos.y += mix(fireY, sporeY, uSporeBlend);
+            basePos.y += age * 3.0;
 
             float orbRadius = 1.0;
-            if (basePos.y > -orbRadius && basePos.y < orbRadius) {
+            if (basePos.y < orbRadius) {
                 float surfaceDist = sqrt(max(0.0, orbRadius*orbRadius - basePos.y*basePos.y));
                 if (length(basePos.xz) < surfaceDist) {
                     basePos.xz = normalize(basePos.xz) * surfaceDist;
                 }
             }
-            float taperTop = exp(-(basePos.y - orbRadius) * 0.5);
-            float taperBot = exp(-(-basePos.y - orbRadius) * 1.5);
-            if (basePos.y > orbRadius) basePos.xz *= mix(taperTop, 1.0, uSporeBlend);
-            if (basePos.y < -orbRadius) basePos.xz *= mix(1.0, taperBot, uSporeBlend);
+            if (basePos.y > orbRadius) {
+                basePos.xz *= exp(-(basePos.y - orbRadius) * 0.5);
+            }
 
-            float fx = sin(basePos.y * 1.2 + uTime * -1.5) * 0.4;
-            float fz = cos(basePos.y * -2.1 + uTime * 5.3) * 0.4;
-            float sx = sin(basePos.y * 3.0 + uTime * 0.5) * 0.5;
-            float sz = cos(basePos.y * -2.8 + uTime * 0.6) * 0.5;
-            vec3 wind = vec3(mix(fx, sx, uSporeBlend), mix(-1.0, 0.0, uSporeBlend), mix(fz, sz, uSporeBlend));
-            basePos += wind * age * mix(1.5, 0.5, uSporeBlend);
+            basePos += getWind(basePos, uTime) * age * 1.5;
 
             vec3 physicalOffset = texture2D(tOffsetPos, aUv).xyz;
             vec3 finalPos = basePos + physicalOffset;
@@ -381,18 +314,13 @@ const pMat = new THREE.ShaderMaterial({
             gl_Position = projectionMatrix * mvPosition;
             
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
-            float sizeMultiplier = mix(1.0, 0.1, uSporeBlend);
-            gl_PointSize = (100.0 * aRand.x + 300.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z) * sizeMultiplier;
+            gl_PointSize = (100.0 * aRand.x + 300.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z);
 
-            vec3 fireMag = vec3(4.0, 0.0, 4.0);
-            vec3 fireGrn = vec3(0.0, 4.0, 1.0);
-            vec3 sporeCyan = vec3(0.0, 4.0, 3.0);
-            vec3 sporeGrn = vec3(1.0, 4.0, 0.0);
+            // COLOR: Magenta and Pure Green (#00ff00 equivalent)
+            vec3 magenta = vec3(4.0, 0.0, 4.0);
+            vec3 green = vec3(0.0, 4.0, 0.0); 
             
-            vec3 c1 = mix(fireMag, sporeCyan, uSporeBlend);
-            vec3 c2 = mix(fireGrn, sporeGrn, uSporeBlend);
-            
-            vColor = mix(c1, c2, step(0.6, aRand.z));
+            vColor = mix(magenta, green, step(0.6, aRand.z));
             vAlpha = smoothstep(1.5, 0.1, normalizedAge) * smoothstep(1.0, 0.05, normalizedAge);
         }
     `,
@@ -452,10 +380,6 @@ let visualTime = 0.0;
 let currentSpeed = 1.0;
 let slowMoReleaseTime = 0;
 
-let lastClickTime = 0;
-let targetSporeBlend = 0.0;
-let currentSporeBlend = 0.0;
-
 const virtualPlane = new THREE.Plane(); 
 const mouse3D = new THREE.Vector3(999, 999, 999);
 let lastMouse3D = new THREE.Vector3(999, 999, 999);
@@ -493,24 +417,20 @@ function handleInteractionStart(e) {
     const intersects = raycaster.intersectObject(orb);
     
     if (intersects.length > 0) {
-        const now = performance.now();
-        
-        if (now - lastClickTime < 300) {
-            targetSporeBlend = targetSporeBlend > 0.5 ? 0.0 : 1.0;
-            currentScale = 1.6; 
-            currentBurst = 3.0; 
-            lastClickTime = 0; 
-        } else {
-            lastClickTime = now;
-            isPressed = true;
-            slowMoReleaseTime = 0; 
-        }
+        isPressed = true;
+        targetScale = 1.25; 
+        targetBurst = 1.0; 
+        slowMoReleaseTime = 0; 
     }
 }
 
 function handleInteractionEnd() {
-    if (isPressed) slowMoReleaseTime = performance.now() * 0.001;
+    if (isPressed) {
+        slowMoReleaseTime = performance.now() * 0.001;
+    }
     isPressed = false;
+    targetScale = 1.0;
+    targetBurst = 0.0; 
 }
 
 window.addEventListener('pointermove', handlePointerMove);
@@ -528,43 +448,16 @@ function animate() {
     
     controls.update();
 
-    let rawLow = 0;
-    let rawHigh = 0;
-    
-    if (isAudioActive && analyser) {
-        analyser.getByteFrequencyData(dataArray);
-        let lowSum = 0;
-        for(let i = 0; i < 10; i++) lowSum += dataArray[i];
-        rawLow = (lowSum / 10) / 255.0; 
-
-        let highSum = 0;
-        for(let i = 50; i < 100; i++) highSum += dataArray[i];
-        rawHigh = (highSum / 50) / 255.0; 
-    }
-    
-    smoothedLow += (rawLow - smoothedLow) * 0.2;
-    smoothedHigh += (rawHigh - smoothedHigh) * 0.2;
-
-    currentSporeBlend += (targetSporeBlend - currentSporeBlend) * 0.02;
-    
     pMat.uniforms.uHtSize.value = HALFTONE_CONFIG.size;
     pMat.uniforms.uHtRotation.value = HALFTONE_CONFIG.rotation;
     pMat.uniforms.uHtShape.value = HALFTONE_CONFIG.shape;
-    pMat.uniforms.uSporeBlend.value = currentSporeBlend;
 
     targetMouseVel.lerp(new THREE.Vector3(0, 0, 0), 0.015); 
     currentMouseVel.lerp(targetMouseVel, 0.05);
 
-    let baseScale = 1.0 + (smoothedLow * 0.8); 
-    
     if (isPressed) {
         currentSpeed += (0.25 - currentSpeed) * 0.15; 
-        targetScale = baseScale + 0.25; 
-        targetBurst = 1.0; 
     } else {
-        targetScale = baseScale;
-        targetBurst = smoothedLow * 2.5; 
-        
         if (slowMoReleaseTime > 0) {
             const timeSinceRelease = realTime - slowMoReleaseTime;
             if (timeSinceRelease < 2.0) {
@@ -585,9 +478,6 @@ function animate() {
     velVar.material.uniforms.uTime.value = visualTime;
     velVar.material.uniforms.dt.value = visualDt; 
     velVar.material.uniforms.uBurst.value = currentBurst;
-    velVar.material.uniforms.uSporeBlend.value = currentSporeBlend;
-    velVar.material.uniforms.uAudioLow.value = smoothedLow;
-    velVar.material.uniforms.uAudioHigh.value = smoothedHigh;
     velVar.material.uniforms.uMouse3D.value.copy(mouse3D);
     velVar.material.uniforms.uMouseVel.value.copy(currentMouseVel);
     posVar.material.uniforms.dt.value = visualDt;
@@ -615,9 +505,8 @@ function animate() {
 }
 
 window.addEventListener('resize', () => {
-    // --- MOBILE BLOOM DYNAMIC UPDATE ---
     const isMobileResize = window.innerWidth <= 768;
-    bloomPass.strength = isMobileResize ? 0.12 : 0.3;
+    bloomPass.strength = isMobileResize ? 0.084 : 0.21;
     bloomPass.threshold = isMobileResize ? 0.1 : 0.05;
 
     camera.aspect = window.innerWidth / window.innerHeight;
