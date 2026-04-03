@@ -23,46 +23,101 @@ body {
     pointer-events: none; 
 }
 
-.ig-link {
+#center-links {
+    display: flex;
+    gap: 24px;
+}
+
+#mic-container {
+    position: absolute;
+    left: 30px;
+    bottom: 0;
+}
+
+.social-link {
+    position: relative; 
     display: inline-block; 
     pointer-events: auto;
-    /* The parent continuously cycles the colors silently in the background */
     animation: neon-sweep 1.5s infinite alternate ease-in-out;
 }
 
-/* We animate the stroke and text color on the parent link. 
-  The SVG will tap into these smoothly when hovered.
-*/
 @keyframes neon-sweep {
     0% {
-        stroke: #ff00ff; /* Magenta icon */
-        color: #00ff33;  /* Green glow */
+        stroke: #ff00ff; 
+        color: #ff00ff;  
     }
     100% {
-        stroke: #00ff33; /* Green icon */
-        color: #ff00ff;  /* Magenta glow */
+        stroke: #00ff33; 
+        color: #00ff33;  
     }
 }
 
-.ig-link svg {
-    /* Increased by 20% from 22px */
-    width: 30px;
-    height: 30px;
-    
-    /* Base State */
+.social-link svg {
+    width: 50px;
+    height: 50px;
     stroke: rgba(255, 255, 255, 0.4); 
     fill: none;
     stroke-width: 1.5;
-    filter: drop-shadow(0 0 0px rgba(255, 255, 255, 0)); /* Hidden glow */
-    
-    /* Smooth transition for fading in AND fading out */
+    filter: drop-shadow(0 0 0px rgba(255, 255, 255, 0)); 
     transition: stroke 0.5s ease, filter 0.5s ease;
 }
 
-.ig-link:hover svg {
-    /* Inherits the currently animating stroke color from the parent */
+.social-link:hover svg {
     stroke: inherit; 
+    filter: drop-shadow(0 0 30px currentColor);
+}
+
+/* --- ACTIVE MIC STATE --- */
+#mic-btn.active svg {
+    animation: none; /* Stop color sweeping */
+    stroke: #00ff33; /* Lock to green */
+    filter: drop-shadow(0 0 15px #00ff33);
+}
+#mic-btn.active::after {
+    content: "Listening..."; /* Update tooltip text when active */
+    color: #00ff33;
+}
+
+/* --- TOOLTIP STYLING --- */
+.social-link::after {
+    content: attr(data-tooltip); 
+    position: absolute;
+    bottom: 110%; 
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
     
-    /* Uses 'currentColor' to grab the animating glow color from the parent */
-    filter: drop-shadow(0 0 8px currentColor);
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px); 
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    
+    font-family: "SF Mono", "Roboto Mono", Consolas, monospace, sans-serif;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.85);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    padding: 8px 12px;
+    
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none; 
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease, color 0.3s ease;
+}
+
+.social-link:hover::after,
+.social-link:active::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0); 
+}
+
+#mic-btn::after {
+    left: 0;
+    transform: translateY(8px);
+}
+#mic-btn:hover::after,
+#mic-btn:active::after {
+    transform: translateY(0); 
 }

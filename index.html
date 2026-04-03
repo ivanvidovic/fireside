@@ -8,14 +8,33 @@
 </head>
 <body>
     <div id="canvas-container"></div>
+    
     <div id="ui-layer">
-        <a href="https://instagram.com/fireside.spark" target="_blank" class="ig-link">
-            <svg viewBox="0 0 24 24">
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-            </svg>
-        </a>
+        <div id="mic-container">
+            <a href="#" class="social-link" id="mic-btn" data-tooltip="Enable Audio Reactive Mode">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                </svg>
+            </a>
+        </div>
+
+        <div id="center-links">
+            <a href="https://instagram.com/fireside.spark" target="_blank" class="social-link" data-tooltip="Follow Us On Instagram">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+            </a>
+            <a href="https://patreon.com/FiresideCreativeTechnology" target="_blank" class="social-link" data-tooltip="Become A Patron">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="16" cy="10" r="6"></circle>
+                    <rect x="3" y="4" width="5" height="16" rx="2.5"></rect>
+                </svg>
+            </a>
+        </div>
     </div>
 
     <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
