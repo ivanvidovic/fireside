@@ -20,7 +20,7 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 camera.position.set(0, 0, 9);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0, 0); 
+controls.target.set(0, 1, 0); 
 controls.enableDamping = true;
 controls.enablePan = false; 
 controls.autoRotate = true; 
@@ -36,9 +36,9 @@ const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.inner
 const composer = new EffectComposer(renderer, renderTarget);
 const renderScene = new RenderPass(scene, camera);
 
-// --- MOBILE BLOOM LOGIC ---
+// --- MOBILE STATE & BLOOM LOGIC ---
 const isMobile = window.innerWidth <= 768;
-const bloomStrength = isMobile ? 0.084 : 0.21;
+const bloomStrength = isMobile ? 0.08 : 0.15;
 const bloomThreshold = isMobile ? 0.1 : 0.05;
 
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, 1.0, bloomThreshold);
@@ -71,6 +71,7 @@ const envMat = new THREE.ShaderMaterial({
 envScene.add(new THREE.Mesh(envGeo, envMat));
 const envMap = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
 
+// 1. The Visual Orb
 const orb = new THREE.Mesh(
     new THREE.SphereGeometry(1.2, 250, 250),
     new THREE.MeshPhysicalMaterial({
@@ -79,8 +80,16 @@ const orb = new THREE.Mesh(
 );
 scene.add(orb);
 
+// 2. NEW: The Invisible Hitbox
+// A massive, forgiving touch target for mobile users so they never miss the center tap
+const hitBox = new THREE.Mesh(
+    new THREE.SphereGeometry(3.5, 16, 16),
+    new THREE.MeshBasicMaterial({ visible: false })
+);
+scene.add(hitBox);
+
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
-const WIDTH = 64;
+const WIDTH = isMobile ? 32 : 64;
 const particleCount = WIDTH * WIDTH; 
 
 const gpuCompute = new GPUComputationRenderer(WIDTH, WIDTH, renderer);
@@ -174,7 +183,6 @@ const offsetVelShader = `
         vec3 actualPos = basePos + offsetPos;
         float individualStrength = mix(0.4, 1.0, fract(aRand.y * 11.7));
 
-        // --- ENHANCED NON-LINEAR FLUID MECHANICS ---
         float distToMouse = length(actualPos - uMouse3D);
         float mouseForce = smoothstep(4.5, 0.0, distToMouse);
         vec3 repulseDir = actualPos - uMouse3D;
@@ -316,7 +324,6 @@ const pMat = new THREE.ShaderMaterial({
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
             gl_PointSize = (100.0 * aRand.x + 300.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z);
 
-            // COLOR: Magenta and Pure Green (#00ff00 equivalent)
             vec3 magenta = vec3(4.0, 0.0, 4.0);
             vec3 green = vec3(0.0, 4.0, 0.0); 
             
@@ -403,8 +410,12 @@ function handlePointerMove(e) {
             mouse3D.copy(intersectPoint);
             lastMouse3D.copy(intersectPoint);
         } else {
-            targetMouseVel.subVectors(intersectPoint, lastMouse3D).multiplyScalar(3.0);
-            mouse3D.copy(intersectPoint);
+            // FIX: Only inject mouse velocity into the fluid simulation on Desktop.
+            // On mobile, this keeps the particles completely undisturbed while dragging.
+            if (!isMobile) {
+                targetMouseVel.subVectors(intersectPoint, lastMouse3D).multiplyScalar(3.0);
+                mouse3D.copy(intersectPoint);
+            }
             lastMouse3D.copy(intersectPoint);
         }
     }
@@ -414,7 +425,10 @@ function handleInteractionStart(e) {
     if (e.target.closest('#ui-layer')) return;
 
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(orb);
+    
+    // FIX: Raycast against the massive invisible 'hitBox', not the physical 'orb'
+    // This makes it virtually impossible to miss the target on mobile.
+    const intersects = raycaster.intersectObject(hitBox);
     
     if (intersects.length > 0) {
         isPressed = true;
