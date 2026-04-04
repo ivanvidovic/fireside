@@ -23,8 +23,8 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1, 0); 
 controls.enableDamping = true;
 controls.enablePan = false; 
-controls.autoRotate = true; 
-controls.autoRotateSpeed = -1.5; 
+controls.autoRotate = false; 
+controls.autoRotateSpeed = -0.5; 
 controls.update();
 
 const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
@@ -71,7 +71,7 @@ const envMat = new THREE.ShaderMaterial({
 envScene.add(new THREE.Mesh(envGeo, envMat));
 const envMap = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
 
-// 1. The Visual Orb
+// 1. The Visual Orb (FIXED TYPO HERE)
 const orb = new THREE.Mesh(
     new THREE.SphereGeometry(1.2, 250, 250),
     new THREE.MeshPhysicalMaterial({
@@ -86,6 +86,281 @@ const hitBox = new THREE.Mesh(
     new THREE.MeshBasicMaterial({ visible: false })
 );
 scene.add(hitBox);
+
+
+// --- 1. TOP HOLOGRAPHIC LED MARQUEE ---
+const textCanvas = document.createElement('canvas');
+textCanvas.height = 64;  
+const tCtx = textCanvas.getContext('2d', { willReadFrequently: true });
+
+const ledTexture = new THREE.CanvasTexture(textCanvas);
+ledTexture.minFilter = THREE.NearestFilter;
+ledTexture.magFilter = THREE.NearestFilter;
+ledTexture.wrapS = THREE.RepeatWrapping; 
+ledTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+function updateMarqueeText(text) {
+    tCtx.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+    const segment = `${text} *** `;
+    const segmentWidth = tCtx.measureText(segment).width;
+    
+    const IDEAL_WIDTH = 1930; 
+    let count = Math.round(IDEAL_WIDTH / segmentWidth);
+    if (count < 1) count = 1; 
+    
+    textCanvas.width = segmentWidth * count;
+    
+    tCtx.fillStyle = '#000000'; 
+    tCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+    
+    tCtx.fillStyle = '#ffffff'; 
+    tCtx.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+    tCtx.textAlign = 'left';
+    tCtx.textBaseline = 'middle';
+    
+    for(let i = 0; i < count; i++) {
+        tCtx.fillText(segment, i * segmentWidth, textCanvas.height / 2 + 4); 
+    }
+    
+    ledTexture.needsUpdate = true;
+}
+
+updateMarqueeText("Fireside [Meetup]");
+
+const ledMat = new THREE.ShaderMaterial({
+    uniforms: {
+        tText: { value: ledTexture },
+        uTime: { value: 0 }
+    },
+    transparent: true,
+    side: THREE.DoubleSide, 
+    blending: THREE.AdditiveBlending, 
+    depthWrite: false, 
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tText;
+        uniform float uTime;
+        varying vec2 vUv;
+
+        void main() {
+            float rows = 24.0;   
+            float cols = 720.0;  
+
+            vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
+            vec2 sampleUv = gridUv;
+            
+            // Top Line
+            sampleUv.x += uTime * 0.01; 
+            
+            vec4 textData = texture2D(tText, sampleUv);
+            vec2 cellUv = fract(vUv * vec2(cols, rows)) - 0.5;
+            float dist = length(cellUv);
+            float ledRadius = 0.25; 
+            float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
+            
+            float isOn = step(0.5, textData.r);
+            float finalAlpha = ledMask * isOn;
+            
+            if (finalAlpha < 0.01) discard; 
+            
+            vec3 ledColor = vec3(0.0, 5.0, 0.0); 
+            gl_FragColor = vec4(ledColor, finalAlpha);
+        }
+    `
+});
+
+const ledGeo = new THREE.CylinderGeometry(2.4, 2.4, 0.5, 64, 16, true);
+const ledRing = new THREE.Mesh(ledGeo, ledMat);
+ledRing.position.y = 3.0; 
+scene.add(ledRing);
+
+
+// --- 2. BOTTOM HOLOGRAPHIC LED MARQUEE ---
+const textCanvasBottom = document.createElement('canvas');
+textCanvasBottom.height = 64;  
+const tCtxBottom = textCanvasBottom.getContext('2d', { willReadFrequently: true });
+
+const ledTextureBottom = new THREE.CanvasTexture(textCanvasBottom);
+ledTextureBottom.minFilter = THREE.NearestFilter;
+ledTextureBottom.magFilter = THREE.NearestFilter;
+ledTextureBottom.wrapS = THREE.RepeatWrapping; 
+ledTextureBottom.wrapT = THREE.ClampToEdgeWrapping;
+
+function updateMarqueeBottom(text) {
+    tCtxBottom.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+    const segment = `${text} *** `;
+    const segmentWidth = tCtxBottom.measureText(segment).width;
+    
+    const IDEAL_WIDTH = 1930; 
+    let count = Math.round(IDEAL_WIDTH / segmentWidth);
+    if (count < 1) count = 1; 
+    
+    textCanvasBottom.width = segmentWidth * count;
+    
+    tCtxBottom.fillStyle = '#000000'; 
+    tCtxBottom.fillRect(0, 0, textCanvasBottom.width, textCanvasBottom.height);
+    
+    tCtxBottom.fillStyle = '#ffffff'; 
+    tCtxBottom.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+    tCtxBottom.textAlign = 'left';
+    tCtxBottom.textBaseline = 'middle';
+    
+    for(let i = 0; i < count; i++) {
+        tCtxBottom.fillText(segment, i * segmentWidth, textCanvasBottom.height / 2 + 4); 
+    }
+    
+    ledTextureBottom.needsUpdate = true;
+}
+
+updateMarqueeBottom("Thursday April 23rd @ 7:00PM @ Goodies Snack Shop");
+
+const ledMatBottom = new THREE.ShaderMaterial({
+    uniforms: {
+        tText: { value: ledTextureBottom },
+        uTime: { value: 0 }
+    },
+    transparent: true,
+    side: THREE.DoubleSide, 
+    blending: THREE.AdditiveBlending, 
+    depthWrite: false, 
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tText;
+        uniform float uTime;
+        varying vec2 vUv;
+
+        void main() {
+            float rows = 17.0;   
+            float cols = 720.0;  
+
+            vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
+            vec2 sampleUv = gridUv;
+            
+            // Bottom Line 
+            sampleUv.x += uTime * 0.03; 
+            
+            vec4 textData = texture2D(tText, sampleUv);
+            vec2 cellUv = fract(vUv * vec2(cols, rows)) - 0.5;
+            float dist = length(cellUv);
+            float ledRadius = 0.25; 
+            float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
+            
+            // INVERTED LOGIC: 1.0 - step() makes black canvas pixels ON, and white text pixels OFF
+            float isOn = 1.0 - step(0.5, textData.r);
+            float finalAlpha = ledMask * isOn;
+            
+            if (finalAlpha < 0.01) discard; 
+            
+            // Dialed back slightly to 2.5 because 90% of the LEDs are now on, keeping the bloom controlled
+            vec3 ledColor = vec3(0.0, 2.5, 0.0); 
+            gl_FragColor = vec4(ledColor, finalAlpha);
+        }
+    `
+});
+
+const ledGeoBottom = new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true);
+const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
+ledRingBottom.position.y = 2.55; 
+scene.add(ledRingBottom);
+
+
+// --- 3. NEW: SHIMMERING STARFIELD (FLOOR) ---
+const starCount = 3000;
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(starCount * 3);
+const starSeed = new Float32Array(starCount);
+
+const maxRadius = 30.0; // The vast size of the field
+
+for(let i=0; i<starCount; i++) {
+    // Distribute them evenly in a circle
+    const r = maxRadius * Math.sqrt(Math.random());
+    const theta = Math.random() * 2 * Math.PI;
+    
+    starPos[i*3 + 0] = r * Math.cos(theta); // x
+    starPos[i*3 + 1] = 0;                   // y (flat plane)
+    starPos[i*3 + 2] = r * Math.sin(theta); // z
+    
+    // Random seed so they twinkle asynchronously
+    starSeed[i] = Math.random() * 100.0;
+}
+
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+starGeo.setAttribute('aSeed', new THREE.BufferAttribute(starSeed, 1));
+
+const starMat = new THREE.ShaderMaterial({
+    uniforms: {
+        uTime: { value: 0 },
+        uMaxRadius: { value: maxRadius }
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    vertexShader: `
+        uniform float uTime;
+        uniform float uMaxRadius;
+        attribute float aSeed;
+        
+        varying float vAlpha;
+        
+        void main() {
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            
+            // Calculate distance from absolute center
+            float dist = length(position.xz);
+            
+            // Smooth radial falloff starting at 20% from the edge, dropping to 0 at maxRadius
+            float falloff = smoothstep(uMaxRadius, uMaxRadius * 0.2, dist);
+            
+            // Twinkle effect using uTime and the unique seed
+            // Modifying speed slightly per star so it feels organic
+            float twinkleSpeed = 1.0 + mod(aSeed, 2.0);
+            float twinkle = sin(uTime * twinkleSpeed + aSeed) * 0.5 + 0.5;
+            
+            vAlpha = falloff * twinkle;
+            
+            // Size shrinks dynamically towards the edge, with some random size variation per star
+            float baseSize = 4.0 + mod(aSeed, 5.0);
+            gl_PointSize = (baseSize * falloff) * (15.0 / -mvPosition.z);
+        }
+    `,
+    fragmentShader: `
+        varying float vAlpha;
+        void main() {
+            // Cut standard square gl_Point into a soft circle
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            float dist = length(coord);
+            if (dist > 0.5) discard;
+            
+            float glow = smoothstep(0.5, 0.0, dist);
+            
+            // Soft, icy white/blue glow pushed just past 1.0 to catch the Bloom Pass
+            vec3 starColor = vec3(1.2, 1.5, 2.0) * glow; 
+            
+            gl_FragColor = vec4(starColor, vAlpha);
+        }
+    `
+});
+
+const starField = new THREE.Points(starGeo, starMat);
+// Push it way down below the scene to create vertigo/depth
+starField.position.y = -6.0; 
+scene.add(starField);
+
+
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
 const WIDTH = isMobile ? 32 : 64;
@@ -368,7 +643,7 @@ const firePoints = new THREE.Points(pGeo, pMat);
 scene.add(firePoints);
 
 
-// --- UPDATED: GLITCH DECRYPTER EFFECT & ANIMATION LOGIC ---
+// --- GLITCH DECRYPTER EFFECT & ANIMATION LOGIC ---
 class TextScramble {
     constructor(el) {
         this.el = el;
@@ -429,7 +704,6 @@ const glitchEl = document.getElementById('glitch-text');
 const targetText = glitchEl.getAttribute('data-text');
 const scrambler = new TextScramble(glitchEl);
 
-// Initialize paragraph empty
 glitchEl.innerHTML = '';
 
 let step1Timeout;
@@ -441,33 +715,28 @@ function closeModal() {
     cancelAnimationFrame(scrambler.frameRequest);
     
     infoModal.classList.remove('step1', 'step2');
-    glitchEl.innerHTML = ''; // Wipe text clean
+    glitchEl.innerHTML = ''; 
 }
 
 infoBtn.addEventListener('click', (e) => {
     e.preventDefault();
     if (infoModal.classList.contains('step1')) return; 
     
-    // Stage 1: Modal scales up and centers screen as a perfect circle
     infoModal.classList.add('step1');
     
-    // Stage 2: Trigger expansion *before* the 800ms landing transition finishes
     step1Timeout = setTimeout(() => {
         if (!infoModal.classList.contains('step1')) return; 
         infoModal.classList.add('step2');
         
-        // Stage 3: Start glitch decryption effect shortly after drawer starts opening
         step2Timeout = setTimeout(() => {
             if (!infoModal.classList.contains('step2')) return;
             scrambler.setText(targetText);
         }, 200); 
-    }, 350); // Overlap creates the smooth, continuous sequence
+    }, 350); 
 });
 
-// Close modal when clicking directly on it
 infoModal.addEventListener('click', closeModal);
 
-// Close modal on Escape key press
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && infoModal.classList.contains('step1')) {
         closeModal();
@@ -597,6 +866,11 @@ function animate() {
     const visualDt = dt * currentSpeed;
     visualTime += visualDt;
 
+    // --- UPDATE ALL ANIMATED SHADER TIMES ---
+    ledMat.uniforms.uTime.value = visualTime;
+    ledMatBottom.uniforms.uTime.value = visualTime;
+    starMat.uniforms.uTime.value = visualTime; // NEW: Update the stars!
+
     velVar.material.uniforms.uTime.value = visualTime;
     velVar.material.uniforms.dt.value = visualDt; 
     velVar.material.uniforms.uBurst.value = currentBurst;
@@ -622,6 +896,10 @@ function animate() {
     const floatY = Math.sin(visualTime * 0.8) * 0.1;
     orb.position.y = floatY;
     firePoints.position.y = floatY;
+    
+    // Make BOTH rings gently float up and down slightly with the orb
+    ledRing.position.y = 3.0 + (floatY * 0.5);
+    ledRingBottom.position.y = 2.55 + (floatY * 0.5);
     
     composer.render();
 }
