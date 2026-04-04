@@ -322,7 +322,7 @@ const pMat = new THREE.ShaderMaterial({
             gl_Position = projectionMatrix * mvPosition;
             
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
-            gl_PointSize = (100.0 * aRand.x + 300.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z);
+            gl_PointSize = (100.0 * aRand.x + 200.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z);
 
             vec3 magenta = vec3(4.0, 0.0, 4.0);
             vec3 green = vec3(0.0, 4.0, 0.0); 
