@@ -71,7 +71,7 @@ const envMat = new THREE.ShaderMaterial({
 envScene.add(new THREE.Mesh(envGeo, envMat));
 const envMap = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
 
-// 1. The Visual Orb (FIXED TYPO HERE)
+// 1. The Visual Orb
 const orb = new THREE.Mesh(
     new THREE.SphereGeometry(1.2, 250, 250),
     new THREE.MeshPhysicalMaterial({
@@ -88,7 +88,7 @@ const hitBox = new THREE.Mesh(
 scene.add(hitBox);
 
 
-// --- 1. TOP HOLOGRAPHIC LED MARQUEE ---
+// --- 1. TOP HOLOGRAPHIC LED MARQUEE (MASTER ANCHOR) ---
 const textCanvas = document.createElement('canvas');
 textCanvas.height = 64;  
 const tCtx = textCanvas.getContext('2d', { willReadFrequently: true });
@@ -181,7 +181,7 @@ ledRing.position.y = 3.0;
 scene.add(ledRing);
 
 
-// --- 2. BOTTOM HOLOGRAPHIC LED MARQUEE ---
+// --- 2. BOTTOM HOLOGRAPHIC LED MARQUEE (CHILD RING) ---
 const textCanvasBottom = document.createElement('canvas');
 textCanvasBottom.height = 64;  
 const tCtxBottom = textCanvasBottom.getContext('2d', { willReadFrequently: true });
@@ -218,7 +218,7 @@ function updateMarqueeBottom(text) {
     ledTextureBottom.needsUpdate = true;
 }
 
-updateMarqueeBottom("Thursday April 23rd @ 7:00PM @ Goodies Snack Shop");
+updateMarqueeBottom("Thursday April 23, 2026 @ 7:00PM @ Goodies Snack Shop");
 
 const ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
@@ -272,28 +272,41 @@ const ledMatBottom = new THREE.ShaderMaterial({
 
 const ledGeoBottom = new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true);
 const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
-ledRingBottom.position.y = 2.55; 
-scene.add(ledRingBottom);
+
+// FIX: Make the bottom ring a direct child of the top ring so they scale together.
+// The Y-position is now relative to the top ring (2.55 - 3.0 = -0.45).
+ledRingBottom.position.y = -0.45; 
+ledRing.add(ledRingBottom);
 
 
-// --- 3. NEW: SHIMMERING STARFIELD (FLOOR) ---
-const starCount = 3000;
+// --- RESPONSIVE MARQUEE SCALING ---
+function updateMarqueeScale() {
+    const aspect = window.innerWidth / window.innerHeight;
+    // 1.45 multiplier perfectly maps the 4.8 diameter to the narrow bounds of a mobile screen
+    const scale = Math.min(1.0, aspect * 1.45); 
+    
+    // We only scale the parent ring. The child follows automatically, preserving the spatial gap.
+    ledRing.scale.setScalar(scale);
+}
+updateMarqueeScale(); // Call once on initialization
+
+
+// --- 3. SHIMMERING STARFIELD (FLOOR) ---
+const starCount = 10000;
 const starGeo = new THREE.BufferGeometry();
 const starPos = new Float32Array(starCount * 3);
 const starSeed = new Float32Array(starCount);
 
-const maxRadius = 30.0; // The vast size of the field
+const maxRadius = 30.0; 
 
 for(let i=0; i<starCount; i++) {
-    // Distribute them evenly in a circle
     const r = maxRadius * Math.sqrt(Math.random());
     const theta = Math.random() * 2 * Math.PI;
     
-    starPos[i*3 + 0] = r * Math.cos(theta); // x
-    starPos[i*3 + 1] = 0;                   // y (flat plane)
-    starPos[i*3 + 2] = r * Math.sin(theta); // z
+    starPos[i*3 + 0] = r * Math.cos(theta); 
+    starPos[i*3 + 1] = (Math.random() - 0.75) * 3.0;  
+    starPos[i*3 + 2] = r * Math.sin(theta); 
     
-    // Random seed so they twinkle asynchronously
     starSeed[i] = Math.random() * 100.0;
 }
 
@@ -319,22 +332,19 @@ const starMat = new THREE.ShaderMaterial({
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             gl_Position = projectionMatrix * mvPosition;
             
-            // Calculate distance from absolute center
             float dist = length(position.xz);
-            
-            // Smooth radial falloff starting at 20% from the edge, dropping to 0 at maxRadius
             float falloff = smoothstep(uMaxRadius, uMaxRadius * 0.2, dist);
             
-            // Twinkle effect using uTime and the unique seed
-            // Modifying speed slightly per star so it feels organic
             float twinkleSpeed = 1.0 + mod(aSeed, 2.0);
             float twinkle = sin(uTime * twinkleSpeed + aSeed) * 0.5 + 0.5;
             
             vAlpha = falloff * twinkle;
             
-            // Size shrinks dynamically towards the edge, with some random size variation per star
-            float baseSize = 4.0 + mod(aSeed, 5.0);
-            gl_PointSize = (baseSize * falloff) * (15.0 / -mvPosition.z);
+            // UPDATED: Base size adjusted from 2.0 down to 1.0 for finer stars
+            float baseSize = 1.0 + mod(aSeed, 1.0);
+            
+            // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
+            gl_PointSize = (baseSize * falloff) * (15.0 / max(0.1, -mvPosition.z));
         }
     `,
     fragmentShader: `
@@ -346,20 +356,115 @@ const starMat = new THREE.ShaderMaterial({
             if (dist > 0.5) discard;
             
             float glow = smoothstep(0.5, 0.0, dist);
-            
-            // Soft, icy white/blue glow pushed just past 1.0 to catch the Bloom Pass
             vec3 starColor = vec3(1.2, 1.5, 2.0) * glow; 
-            
             gl_FragColor = vec4(starColor, vAlpha);
         }
     `
 });
 
 const starField = new THREE.Points(starGeo, starMat);
-// Push it way down below the scene to create vertigo/depth
-starField.position.y = -6.0; 
+starField.position.y = -3.0; 
+starField.frustumCulled = false; 
 scene.add(starField);
 
+
+// --- 4. FRESH APPROACH: STABLE CITY TRAFFIC LAYER ---
+const trafficCount = 5000; 
+const trafficRadius = 40.0; 
+const laneSpacing = 2.0; 
+
+const trafficGeo = new THREE.BufferGeometry();
+const trafficPos = new Float32Array(trafficCount * 3);
+const trafficColor = new Float32Array(trafficCount * 3);
+const trafficSize = new Float32Array(trafficCount);
+
+// Flat data array instead of class instances for memory stability
+const cars = [];
+const DIRS = [[1,0], [-1,0], [0,1], [0,-1]];
+
+for(let i=0; i<trafficCount; i++) {
+    // Snap starting positions to exact intersections on the grid
+    let startX = Math.round((Math.random() - 0.5) * (trafficRadius * 1.5) / laneSpacing) * laneSpacing;
+    let startZ = Math.round((Math.random() - 0.5) * (trafficRadius * 1.5) / laneSpacing) * laneSpacing;
+    
+    let dir = DIRS[Math.floor(Math.random() * DIRS.length)];
+    
+    cars.push({
+        x: startX,
+        z: startZ,
+        targetX: startX + (dir[0] * laneSpacing),
+        targetZ: startZ + (dir[1] * laneSpacing),
+        dirX: dir[0],
+        dirZ: dir[1],
+        speed: 0.05 + Math.random() * 1.0, // Base speed variations
+        state: Math.random() > 0.5 ? 1 : 0, // 1 = MOVING, 0 = STOPPED
+        timer: Math.random() * 2.0 // Random stagger so they don't all start at once
+    });
+
+    trafficPos[i*3 + 0] = startX;
+    trafficPos[i*3 + 1] = 0;
+    trafficPos[i*3 + 2] = startZ;
+
+    // 50/50 Green vs Magenta
+    if (Math.random() > 0.5) {
+        trafficColor[i*3]=5.0; trafficColor[i*3+1]=0.0; trafficColor[i*3+2]=5.0;
+    } else {
+        trafficColor[i*3]=0.0; trafficColor[i*3+1]=5.0; trafficColor[i*3+2]=0.0;
+    }
+
+    // Tiny, varied sizes
+    trafficSize[i] = 1.0 + Math.random() * 3.0; 
+}
+
+trafficGeo.setAttribute('position', new THREE.BufferAttribute(trafficPos, 3));
+trafficGeo.setAttribute('aColor', new THREE.BufferAttribute(trafficColor, 3));
+trafficGeo.setAttribute('aSize', new THREE.BufferAttribute(trafficSize, 1));
+
+const trafficMat = new THREE.ShaderMaterial({
+    uniforms: {
+        uMaxRadius: { value: trafficRadius }
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    vertexShader: `
+        uniform float uMaxRadius;
+        attribute vec3 aColor;
+        attribute float aSize;
+        varying vec3 vColor;
+        varying float vAlpha;
+        
+        void main() {
+            vColor = aColor;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            
+            float dist = length(position.xz);
+            float falloff = smoothstep(uMaxRadius * 1.2, uMaxRadius * 0.2, dist);
+            vAlpha = falloff;
+            
+            // Safeguard division to prevent NaN camera crashes
+            gl_PointSize = (aSize * falloff) * (20.0 / max(0.1, -mvPosition.z));
+        }
+    `,
+    fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            float dist = length(coord);
+            if (dist > 0.5) discard;
+            float glow = smoothstep(0.5, 0.1, dist);
+            gl_FragColor = vec4(vColor * glow, vAlpha * glow);
+        }
+    `
+});
+
+const trafficField = new THREE.Points(trafficGeo, trafficMat);
+trafficField.position.y = -3.5; 
+// FIX: Force rendering regardless of camera zoom to prevent vanishing bugs
+trafficField.frustumCulled = false; 
+scene.add(trafficField);
 
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
@@ -596,7 +701,8 @@ const pMat = new THREE.ShaderMaterial({
             gl_Position = projectionMatrix * mvPosition;
             
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
-            gl_PointSize = (100.0 * aRand.x + 200.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / -mvPosition.z);
+            // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
+            gl_PointSize = (100.0 * aRand.x + 200.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / max(0.1, -mvPosition.z));
 
             vec3 magenta = vec3(4.0, 0.0, 4.0);
             vec3 green = vec3(0.0, 4.0, 0.0); 
@@ -835,7 +941,7 @@ function animate() {
     const realTime = performance.now() * 0.001;
     const rawDt = realTime - previousRealTime;
     previousRealTime = realTime;
-    const dt = Math.min(rawDt, 0.05); 
+    const visualDt = Math.min(rawDt, 0.05); 
     
     controls.update();
 
@@ -863,20 +969,92 @@ function animate() {
         }
     }
 
-    const visualDt = dt * currentSpeed;
-    visualTime += visualDt;
+    const scaledDt = visualDt * currentSpeed;
+    visualTime += scaledDt;
 
     // --- UPDATE ALL ANIMATED SHADER TIMES ---
     ledMat.uniforms.uTime.value = visualTime;
     ledMatBottom.uniforms.uTime.value = visualTime;
-    starMat.uniforms.uTime.value = visualTime; // NEW: Update the stars!
+    starMat.uniforms.uTime.value = visualTime; 
+
+    // --- PURE JS TRAFFIC LOGIC (SAFE STOP & GO + TURNS) ---
+    const tPositions = trafficField.geometry.attributes.position.array;
+    
+    for(let i = 0; i < trafficCount; i++) {
+        let car = cars[i];
+        
+        if (car.state === 0) { // 0 = STOPPED
+            car.timer -= visualDt;
+            if (car.timer <= 0) {
+                car.state = 1; // 1 = MOVING
+                
+                // Valid directions (prevent exact U-turns)
+                const possibleDirs = [];
+                if (car.dirX !== -1) possibleDirs.push([1,0]);
+                if (car.dirX !== 1) possibleDirs.push([-1,0]);
+                if (car.dirZ !== -1) possibleDirs.push([0,1]);
+                if (car.dirZ !== 1) possibleDirs.push([0,-1]);
+                
+                // Pick a new random turn
+                let nextDir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
+                car.dirX = nextDir[0];
+                car.dirZ = nextDir[1];
+                
+                // Set the destination 1 block away
+                car.targetX = car.x + (car.dirX * laneSpacing);
+                car.targetZ = car.z + (car.dirZ * laneSpacing);
+                
+                // Boundary check: teleport if driven out of the city limits
+                if (car.targetX*car.targetX + car.targetZ*car.targetZ > trafficRadius*trafficRadius) {
+                    car.x = Math.round((Math.random() - 0.5) * (trafficRadius) / laneSpacing) * laneSpacing;
+                    car.z = Math.round((Math.random() - 0.5) * (trafficRadius) / laneSpacing) * laneSpacing;
+                    car.targetX = car.x + (car.dirX * laneSpacing);
+                    car.targetZ = car.z + (car.dirZ * laneSpacing);
+                }
+            }
+        } else { // 1 = MOVING
+            let dx = car.targetX - car.x;
+            let dz = car.targetZ - car.z;
+            
+            // Simple geometric distance to target
+            let dist = Math.sqrt(dx*dx + dz*dz);
+            
+            if (dist < 0.05) {
+                // Arrived at intersection
+                car.x = car.targetX;
+                car.z = car.targetZ;
+                car.state = 0; // STOPPED
+                // Wait for random heartbeat (red light)
+                car.timer = 0.5 + Math.random() * 2.0; 
+            } else {
+                // Sine wave ease-in / ease-out based on distance across the block
+                let progress = 1.0 - (dist / laneSpacing);
+                
+                // Math.max guarantees the car never completely stalls mid-block
+                let easeSpeed = Math.max(0.15, Math.sin(progress * Math.PI)); 
+                
+                let stepDist = car.speed * easeSpeed * visualDt;
+                
+                // Prevent overshooting the intersection
+                if (stepDist > dist) stepDist = dist;
+                
+                car.x += (dx / dist) * stepDist;
+                car.z += (dz / dist) * stepDist;
+            }
+        }
+        
+        // Write back to the GPU array
+        tPositions[i*3 + 0] = car.x;
+        tPositions[i*3 + 2] = car.z;
+    }
+    trafficField.geometry.attributes.position.needsUpdate = true;
 
     velVar.material.uniforms.uTime.value = visualTime;
-    velVar.material.uniforms.dt.value = visualDt; 
+    velVar.material.uniforms.dt.value = scaledDt; 
     velVar.material.uniforms.uBurst.value = currentBurst;
     velVar.material.uniforms.uMouse3D.value.copy(mouse3D);
     velVar.material.uniforms.uMouseVel.value.copy(currentMouseVel);
-    posVar.material.uniforms.dt.value = visualDt;
+    posVar.material.uniforms.dt.value = scaledDt;
 
     gpuCompute.compute();
     
@@ -897,9 +1075,9 @@ function animate() {
     orb.position.y = floatY;
     firePoints.position.y = floatY;
     
-    // Make BOTH rings gently float up and down slightly with the orb
+    // ANCHOR UPDATE: Only the parent ring needs to bob; child follows automatically.
+    // Removed mScale multiplier from vertical position to prevent "creeping" toward the center.
     ledRing.position.y = 3.0 + (floatY * 0.5);
-    ledRingBottom.position.y = 2.55 + (floatY * 0.5);
     
     composer.render();
 }
@@ -914,6 +1092,9 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderTarget.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Re-evaluate scaling on window resize/device rotation
+    updateMarqueeScale();
 });
 
 animate();
