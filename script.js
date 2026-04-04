@@ -279,16 +279,15 @@ ledRingBottom.position.y = -0.45;
 ledRing.add(ledRingBottom);
 
 
-// --- RESPONSIVE MARQUEE SCALING ---
-function updateMarqueeScale() {
+// --- RESPONSIVE CAMERA LOGIC (Moiré Fix) ---
+// Instead of scaling the geometry, we pull the camera back on narrow screens.
+// This keeps the LED shader pixels crisp and prevents banding/aliasing.
+function updateCameraZoom() {
     const aspect = window.innerWidth / window.innerHeight;
-    // 1.45 multiplier perfectly maps the 4.8 diameter to the narrow bounds of a mobile screen
-    const scale = Math.min(1.0, aspect * 1.45); 
-    
-    // We only scale the parent ring. The child follows automatically, preserving the spatial gap.
-    ledRing.scale.setScalar(scale);
+    const scaleFactor = Math.min(1.0, aspect * 1.45);
+    camera.position.z = 9.0 / scaleFactor;
 }
-updateMarqueeScale(); // Call once on initialization
+updateCameraZoom(); // Call once on initialization
 
 
 // --- 3. SHIMMERING STARFIELD (FLOOR) ---
@@ -1076,7 +1075,6 @@ function animate() {
     firePoints.position.y = floatY;
     
     // ANCHOR UPDATE: Only the parent ring needs to bob; child follows automatically.
-    // Removed mScale multiplier from vertical position to prevent "creeping" toward the center.
     ledRing.position.y = 3.0 + (floatY * 0.5);
     
     composer.render();
@@ -1093,8 +1091,8 @@ window.addEventListener('resize', () => {
     renderTarget.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
     
-    // Re-evaluate scaling on window resize/device rotation
-    updateMarqueeScale();
+    // Update camera distance instead of scaling rings
+    updateCameraZoom();
 });
 
 animate();
