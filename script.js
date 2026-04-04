@@ -80,8 +80,7 @@ const orb = new THREE.Mesh(
 );
 scene.add(orb);
 
-// 2. NEW: The Invisible Hitbox
-// A massive, forgiving touch target for mobile users so they never miss the center tap
+// 2. The Invisible Hitbox
 const hitBox = new THREE.Mesh(
     new THREE.SphereGeometry(3.5, 16, 16),
     new THREE.MeshBasicMaterial({ visible: false })
@@ -368,6 +367,114 @@ const pMat = new THREE.ShaderMaterial({
 const firePoints = new THREE.Points(pGeo, pMat);
 scene.add(firePoints);
 
+
+// --- UPDATED: GLITCH DECRYPTER EFFECT & ANIMATION LOGIC ---
+class TextScramble {
+    constructor(el) {
+        this.el = el;
+        this.chars = '!<>-\\/[]{}—=+*^?#';
+        this.update = this.update.bind(this);
+    }
+    setText(newText) {
+        const oldText = this.el.innerText;
+        const length = Math.max(oldText.length, newText.length);
+        const promise = new Promise((resolve) => this.resolve = resolve);
+        this.queue = [];
+        for (let i = 0; i < length; i++) {
+            const from = oldText[i] || '';
+            const to = newText[i] || '';
+            const start = Math.floor(Math.random() * 40);
+            const end = start + Math.floor(Math.random() * 40);
+            this.queue.push({ from, to, start, end });
+        }
+        cancelAnimationFrame(this.frameRequest);
+        this.frame = 0;
+        this.update();
+        return promise;
+    }
+    update() {
+        let output = '';
+        let complete = 0;
+        for (let i = 0, n = this.queue.length; i < n; i++) {
+            let { from, to, start, end, char } = this.queue[i];
+            if (this.frame >= end) {
+                complete++;
+                output += to;
+            } else if (this.frame >= start) {
+                if (!char || Math.random() < 0.28) {
+                    char = this.randomChar();
+                    this.queue[i].char = char;
+                }
+                output += `<span style="color: #00ff00; opacity: 0.7;">${char}</span>`;
+            } else {
+                output += from;
+            }
+        }
+        this.el.innerHTML = output;
+        if (complete === this.queue.length) {
+            this.resolve();
+        } else {
+            this.frameRequest = requestAnimationFrame(this.update);
+            this.frame++;
+        }
+    }
+    randomChar() {
+        return this.chars[Math.floor(Math.random() * this.chars.length)];
+    }
+}
+
+const infoBtn = document.getElementById('info-btn');
+const infoModal = document.getElementById('info-modal');
+const glitchEl = document.getElementById('glitch-text');
+const targetText = glitchEl.getAttribute('data-text');
+const scrambler = new TextScramble(glitchEl);
+
+// Initialize paragraph empty
+glitchEl.innerHTML = '';
+
+let step1Timeout;
+let step2Timeout;
+
+function closeModal() {
+    clearTimeout(step1Timeout);
+    clearTimeout(step2Timeout);
+    cancelAnimationFrame(scrambler.frameRequest);
+    
+    infoModal.classList.remove('step1', 'step2');
+    glitchEl.innerHTML = ''; // Wipe text clean
+}
+
+infoBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (infoModal.classList.contains('step1')) return; 
+    
+    // Stage 1: Modal scales up and centers screen as a perfect circle
+    infoModal.classList.add('step1');
+    
+    // Stage 2: Trigger expansion *before* the 800ms landing transition finishes
+    step1Timeout = setTimeout(() => {
+        if (!infoModal.classList.contains('step1')) return; 
+        infoModal.classList.add('step2');
+        
+        // Stage 3: Start glitch decryption effect shortly after drawer starts opening
+        step2Timeout = setTimeout(() => {
+            if (!infoModal.classList.contains('step2')) return;
+            scrambler.setText(targetText);
+        }, 200); 
+    }, 350); // Overlap creates the smooth, continuous sequence
+});
+
+// Close modal when clicking directly on it
+infoModal.addEventListener('click', closeModal);
+
+// Close modal on Escape key press
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && infoModal.classList.contains('step1')) {
+        closeModal();
+    }
+});
+
+
 // --- INTERACTION LOGIC & STATE ---
 let targetScale = 1.0;
 let currentScale = 1.0;
@@ -410,8 +517,6 @@ function handlePointerMove(e) {
             mouse3D.copy(intersectPoint);
             lastMouse3D.copy(intersectPoint);
         } else {
-            // FIX: Only inject mouse velocity into the fluid simulation on Desktop.
-            // On mobile, this keeps the particles completely undisturbed while dragging.
             if (!isMobile) {
                 targetMouseVel.subVectors(intersectPoint, lastMouse3D).multiplyScalar(3.0);
                 mouse3D.copy(intersectPoint);
@@ -422,12 +527,15 @@ function handlePointerMove(e) {
 }
 
 function handleInteractionStart(e) {
-    if (e.target.closest('#ui-layer')) return;
+    if (e.target.closest('#ui-layer') || e.target.closest('#info-modal')) return;
+
+    if (infoModal.classList.contains('step1')) {
+        closeModal();
+        return; 
+    }
 
     raycaster.setFromCamera(mouse, camera);
     
-    // FIX: Raycast against the massive invisible 'hitBox', not the physical 'orb'
-    // This makes it virtually impossible to miss the target on mobile.
     const intersects = raycaster.intersectObject(hitBox);
     
     if (intersects.length > 0) {
@@ -520,7 +628,7 @@ function animate() {
 
 window.addEventListener('resize', () => {
     const isMobileResize = window.innerWidth <= 768;
-    bloomPass.strength = isMobileResize ? 0.084 : 0.21;
+    bloomPass.strength = isMobileResize ? 0.08 : 0.15;
     bloomPass.threshold = isMobileResize ? 0.1 : 0.05;
 
     camera.aspect = window.innerWidth / window.innerHeight;
