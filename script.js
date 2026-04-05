@@ -283,7 +283,6 @@ ledRing.add(ledRingBottom);
 
 
 // --- RESPONSIVE CAMERA LOGIC (Moiré Fix) ---
-// We dynamically widen the camera's Field of View on narrow screens to fit the scene perfectly.
 function updateResponsiveCamera() {
     const aspect = window.innerWidth / window.innerHeight;
     const scaleFactor = Math.min(1.0, aspect * 1.45); 
@@ -402,7 +401,7 @@ for(let i=0; i<trafficCount; i++) {
         dirZ: dir[1],
         speed: 0.05 + Math.random() * 1.0, // Base speed variations
         state: Math.random() > 0.5 ? 1 : 0, // 1 = MOVING, 0 = STOPPED
-        timer: Math.random() * 2.0 // Random stagger so they don't all start at once
+        timer: Math.random() * 2.0 // Random stagger so they dont all start at once
     });
 
     trafficPos[i*3 + 0] = startX;
@@ -473,7 +472,7 @@ scene.add(trafficField);
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
 // Locked permanently to 32x32 (1024 particles) for a crisp fluid effect that never clumps.
-const WIDTH = 32; 
+const WIDTH = 64; 
 const particleCount = WIDTH * WIDTH; 
 
 const gpuCompute = new GPUComputationRenderer(WIDTH, WIDTH, renderer);
@@ -939,9 +938,29 @@ window.addEventListener('pointermove', handlePointerMove);
 window.addEventListener('pointerdown', handleInteractionStart);
 window.addEventListener('pointerup', handleInteractionEnd);
 
+// Dynamic dimensions polling cache to entirely bypass DOM resize bugs
+let lastWidth = 0;
+let lastHeight = 0;
+
 // --- Animation Loop ---
 function animate() {
     requestAnimationFrame(animate);
+    
+    // --- CONTINUOUS RESIZE POLLING FIX ---
+    // Checks true window dimensions every single frame instead of relying on flaky events.
+    if (window.innerWidth !== lastWidth || window.innerHeight !== lastHeight) {
+        lastWidth = window.innerWidth;
+        lastHeight = window.innerHeight;
+        
+        camera.aspect = lastWidth / lastHeight;
+        const scaleFactor = Math.min(1.0, camera.aspect * 1.45); 
+        camera.fov = 45 / scaleFactor;
+        camera.updateProjectionMatrix();
+        
+        renderer.setSize(lastWidth, lastHeight);
+        renderTarget.setSize(lastWidth, lastHeight);
+        composer.setSize(lastWidth, lastHeight);
+    }
     
     const realTime = performance.now() * 0.001;
     const rawDt = realTime - previousRealTime;
@@ -1086,21 +1105,4 @@ function animate() {
     composer.render();
 }
 
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    
-    // Updates camera FOV directly on window resize or device rotation
-    updateResponsiveCamera();
-    
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderTarget.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
-});
-
 animate();
-
-// Force a ghost resize shortly after load to guarantee the mobile viewport has settled
-// and the camera FOV is perfectly framed, overriding any initial browser layout bugs.
-setTimeout(() => {
-    window.dispatchEvent(new Event('resize'));
-}, 150);
