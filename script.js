@@ -472,7 +472,7 @@ scene.add(trafficField);
 
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
-// Locked permanently to 32x32 (1024 particles) for a crisp fluid effect that never clumps.
+// Locked permanently to 64x64 (4096 particles)
 const WIDTH = 64; 
 const particleCount = WIDTH * WIDTH; 
 
@@ -897,10 +897,11 @@ function handlePointerMove(e) {
             mouse3D.copy(intersectPoint);
             lastMouse3D.copy(intersectPoint);
         } else {
-            if (!isMobile) {
-                targetMouseVel.subVectors(intersectPoint, lastMouse3D).multiplyScalar(3.0);
-                mouse3D.copy(intersectPoint);
-            }
+            // FIX: Removed the desktop-only (!isMobile) restriction.
+            // Now touch/drag correctly updates the 3D position in real-time.
+            targetMouseVel.subVectors(intersectPoint, lastMouse3D).multiplyScalar(3.0);
+            mouse3D.copy(intersectPoint);
+            
             lastMouse3D.copy(intersectPoint);
         }
     }
@@ -933,6 +934,10 @@ function handleInteractionEnd() {
     isPressed = false;
     targetScale = 1.0;
     targetBurst = 0.0; 
+    
+    // FIX: Clear the "ghost finger" when you let go, so the particles settle back to base
+    mouse3D.set(999, 999, 999);
+    lastMouse3D.set(999, 999, 999);
 }
 
 window.addEventListener('pointermove', handlePointerMove);
