@@ -26,7 +26,8 @@ controls.target.set(0, 1, 0);
 controls.enableDamping = true;
 controls.enablePan = false; 
 controls.autoRotate = true; 
-controls.autoRotateSpeed = -0.5; 
+controls.autoRotateSpeed = -0.5;
+controls.maxDistance = 50.0; 
 controls.update();
 
 const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
@@ -551,7 +552,7 @@ scene.add(starField);
 
 // --- 4. FRESH APPROACH: STABLE CITY TRAFFIC LAYER ---
 const trafficCount = 5000; 
-const trafficRadius = 40.0; 
+const trafficRadius = 30.0; 
 const laneSpacing = 2.0; 
 
 const trafficGeo = new THREE.BufferGeometry();
