@@ -36,10 +36,13 @@ const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.inner
 const composer = new EffectComposer(renderer, renderTarget);
 const renderScene = new RenderPass(scene, camera);
 
-// --- MOBILE STATE & BLOOM LOGIC ---
-const isMobile = window.innerWidth <= 768;
-const bloomStrength = isMobile ? 0.08 : 0.15;
-const bloomThreshold = isMobile ? 0.1 : 0.05;
+// --- UNIFIED VISUAL STATE & BLOOM LOGIC ---
+const isMobile = window.innerWidth <= 768; // Kept solely for touch velocity math
+
+// Visually locked to the clean, crisp rendering state permanently 
+// to prevent chunky moiré loads on mobile devices.
+const bloomStrength = 0.08;
+const bloomThreshold = 0.1;
 
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, 1.0, bloomThreshold);
 composer.addPass(renderScene);
@@ -273,21 +276,23 @@ const ledMatBottom = new THREE.ShaderMaterial({
 const ledGeoBottom = new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true);
 const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
 
-// FIX: Make the bottom ring a direct child of the top ring so they scale together.
+// The bottom ring is a direct child of the top ring so they scale together.
 // The Y-position is now relative to the top ring (2.55 - 3.0 = -0.45).
 ledRingBottom.position.y = -0.45; 
 ledRing.add(ledRingBottom);
 
 
 // --- RESPONSIVE CAMERA LOGIC (Moiré Fix) ---
-// Instead of scaling the geometry, we pull the camera back on narrow screens.
-// This keeps the LED shader pixels crisp and prevents banding/aliasing.
-function updateCameraZoom() {
+// We dynamically widen the camera's Field of View on narrow screens to fit the scene perfectly.
+function updateResponsiveCamera() {
     const aspect = window.innerWidth / window.innerHeight;
-    const scaleFactor = Math.min(1.0, aspect * 1.45);
-    camera.position.z = 9.0 / scaleFactor;
+    const scaleFactor = Math.min(1.0, aspect * 1.45); 
+    
+    // Default FOV is 45. We increase it proportionally as the screen gets narrower.
+    camera.fov = 45 / scaleFactor;
+    camera.updateProjectionMatrix();
 }
-updateCameraZoom(); // Call once on initialization
+updateResponsiveCamera(); // Call once on initialization
 
 
 // --- 3. SHIMMERING STARFIELD (FLOOR) ---
@@ -339,7 +344,7 @@ const starMat = new THREE.ShaderMaterial({
             
             vAlpha = falloff * twinkle;
             
-            // UPDATED: Base size adjusted from 2.0 down to 1.0 for finer stars
+            // Base size adjusted to 1.0 for finer stars
             float baseSize = 1.0 + mod(aSeed, 1.0);
             
             // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
@@ -467,7 +472,8 @@ scene.add(trafficField);
 
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
-const WIDTH = isMobile ? 32 : 64;
+// Locked permanently to 32x32 (1024 particles) for a crisp fluid effect that never clumps.
+const WIDTH = 32; 
 const particleCount = WIDTH * WIDTH; 
 
 const gpuCompute = new GPUComputationRenderer(WIDTH, WIDTH, renderer);
@@ -1081,18 +1087,20 @@ function animate() {
 }
 
 window.addEventListener('resize', () => {
-    const isMobileResize = window.innerWidth <= 768;
-    bloomPass.strength = isMobileResize ? 0.08 : 0.15;
-    bloomPass.threshold = isMobileResize ? 0.1 : 0.05;
-
     camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    
+    // Updates camera FOV directly on window resize or device rotation
+    updateResponsiveCamera();
+    
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderTarget.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
-    
-    // Update camera distance instead of scaling rings
-    updateCameraZoom();
 });
 
 animate();
+
+// Force a ghost resize shortly after load to guarantee the mobile viewport has settled
+// and the camera FOV is perfectly framed, overriding any initial browser layout bugs.
+setTimeout(() => {
+    window.dispatchEvent(new Event('resize'));
+}, 150);
