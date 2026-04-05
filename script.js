@@ -222,7 +222,7 @@ function updateMarqueeBottom(text) {
     ledTextureBottom.needsUpdate = true;
 }
 
-updateMarqueeBottom("Thursday April 23, 2026 @ 7:00PM @ Goodies Snack Shop");
+updateMarqueeBottom("Thursday April 23rd @ 7:00PM inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209");
 
 const ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
