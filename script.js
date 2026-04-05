@@ -30,6 +30,7 @@ controls.autoRotateSpeed = -0.5;
 controls.maxDistance = 50.0; 
 controls.update();
 
+// Reverted to a standard lightweight render target (Depth Texture removed for performance)
 const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
@@ -90,6 +91,7 @@ class HallucinationPass extends Pass {
                 float getTrailStrength(int t) {
                     if (t == 3) return 0.94; // Hallucination Mode
                     if (t == 1) return 0.82; // Faint Black Light Trace
+                    if (t == 5) return 0.80; // ASCII Phosphor Ghosting
                     return 0.0;
                 }
 
@@ -160,7 +162,8 @@ const themeShader = {
         uTheme: { value: 0 }, 
         uNextTheme: { value: 0 }, 
         uTransition: { value: 0.0 },
-        uTime: { value: 0 }
+        uTime: { value: 0 },
+        uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
     },
     vertexShader: `
         varying vec2 vUv;
@@ -175,14 +178,17 @@ const themeShader = {
         uniform int uNextTheme;
         uniform float uTransition;
         uniform float uTime;
+        uniform vec2 uResolution;
         varying vec2 vUv;
 
         float luminance(vec3 color) {
             return dot(color, vec3(0.299, 0.587, 0.114));
         }
 
-        vec3 getThemeColor(int t, vec3 rawColor, float lum, float scanline) {
-            // FIXED THEME INTEGER MAPPING HERE
+        vec3 getThemeColor(int t, vec2 uv, float scanline) {
+            vec3 rawColor = texture2D(tDiffuse, uv).rgb;
+            float lum = luminance(rawColor);
+
             if (t == 2) {
                 // THEME 2: E-INK LIGHT MODE
                 vec3 bgEink = vec3(0.92, 0.90, 0.88); 
@@ -206,7 +212,21 @@ const themeShader = {
                 float orangeScore = (rawColor.r * rawColor.g) - (rawColor.b * 2.0);
                 float isOrange = smoothstep(0.1, 0.5, orangeScore);
                 
-                return mix(purpleWash, rawColor, isOrange); // No scanlines
+                return mix(purpleWash, rawColor, isOrange); 
+                
+            } else if (t == 5) {
+                // THEME 5: ASCII MAINFRAME
+                float gridSize = 600.0;
+                vec2 gridUv = floor(uv * gridSize * vec2(1.0, 1.0)) / (gridSize * vec2(1.0, 1.0));
+                float blockLum = luminance(texture2D(tDiffuse, gridUv).rgb);
+                
+                vec2 localUv = fract(uv * gridSize * vec2(1.0, 0.5));
+                float charMask = step(0.5, localUv.x) * step(0.5, localUv.y);
+                
+                vec3 phosphor = vec3(0.0, 1.0, 0.25);
+                vec3 asciiColor = phosphor * blockLum * charMask * 1.5;
+                asciiColor += vec3(0.5, 1.0, 0.5) * step(0.8, blockLum); 
+                return asciiColor - scanline * 3.0;
             }
             
             // Themes 0 (Default) and 3 (Hallucination) simply pass raw color
@@ -214,14 +234,12 @@ const themeShader = {
         }
 
         void main() {
-            vec4 texColor = texture2D(tDiffuse, vUv);
-            float lum = luminance(texColor.rgb);
             float scanline = sin(gl_FragCoord.y * 1.5) * 0.04;
 
-            vec3 colorCurrent = getThemeColor(uTheme, texColor.rgb, lum, scanline);
+            vec3 colorCurrent = getThemeColor(uTheme, vUv, scanline);
             
             if (uTransition > 0.0) {
-                vec3 colorNext = getThemeColor(uNextTheme, texColor.rgb, lum, scanline);
+                vec3 colorNext = getThemeColor(uNextTheme, vUv, scanline);
                 gl_FragColor = vec4(mix(colorCurrent, colorNext, uTransition), 1.0);
             } else {
                 gl_FragColor = vec4(colorCurrent, 1.0);
@@ -344,9 +362,10 @@ const ledMat = new THREE.ShaderMaterial({
         varying vec2 vUv;
 
         vec3 getLEDColor(int t) {
-            if (t == 3) return vec3(0.0, 0.0, 5.0); // Hallucination Blue
-            if (t == 1) return vec3(6.0, 0.5, 0.0); // Black Light Orange
-            return vec3(0.0, 5.0, 0.0);             // Default Green
+            if (t == 3) return vec3(0.0, 0.0, 5.0); 
+            if (t == 1) return vec3(6.0, 0.5, 0.0); 
+            if (t == 5) return vec3(0.0, 4.0, 0.5); 
+            return vec3(0.0, 5.0, 0.0);             
         }
 
         void main() {
@@ -451,9 +470,10 @@ const ledMatBottom = new THREE.ShaderMaterial({
         varying vec2 vUv;
 
         vec3 getLEDColor(int t) {
-            if (t == 3) return vec3(0.0, 0.0, 2.5); // Hallucination Blue
-            if (t == 1) return vec3(4.0, 0.4, 0.0); // Black Light Orange
-            return vec3(0.0, 2.5, 0.0);             // Default Green
+            if (t == 3) return vec3(0.0, 0.0, 2.5); 
+            if (t == 1) return vec3(4.0, 0.4, 0.0); 
+            if (t == 5) return vec3(0.0, 2.5, 0.3); 
+            return vec3(0.0, 2.5, 0.0);             
         }
 
         void main() {
@@ -505,21 +525,17 @@ if (themeBtn) {
     themeBtn.addEventListener('click', (e) => {
         e.preventDefault();
         
-        // Manual override: Instantly snap to the destination if mid-transition
         if (isTransitioning) {
             currentTheme = nextTheme;
         }
         
-        // Cycle the next theme manually
-        currentTheme = (currentTheme + 1) % 5; 
+        currentTheme = (currentTheme + 1) % 6; 
         
-        // Reset timers and disable the automatic transition crossfade
         isTransitioning = false;
         transitionProgress = 0.0;
         idleTimer = 0.0; 
         uiUpdated = false;
         
-        // Tell shaders to snap instantly
         themePass.uniforms.uTheme.value = currentTheme;
         themePass.uniforms.uTransition.value = 0.0;
         
@@ -1123,7 +1139,6 @@ function handlePointerMove(e) {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
-    // Reset the Idle timer if the user moves their mouse around the scene
     if (!isTransitioning) idleTimer = 0.0;
     
     const cameraDir = new THREE.Vector3();
@@ -1204,6 +1219,8 @@ function animate() {
         composer.setSize(lastWidth, lastHeight);
         
         hallucinationPass.setSize(lastWidth, lastHeight);
+        
+        themePass.uniforms.uResolution.value.set(lastWidth, lastHeight);
     }
     
     const realTime = performance.now() * 0.001;
@@ -1217,10 +1234,9 @@ function animate() {
     if (!isTransitioning) {
         idleTimer += rawDt;
         
-        // Every 30 seconds, trigger the automated crossfade to the next mode
         if (idleTimer >= 30.0) {
             isTransitioning = true;
-            nextTheme = (currentTheme + 1) % 5;
+            nextTheme = (currentTheme + 1) % 6;
             transitionProgress = 0.0;
             uiUpdated = false;
             
@@ -1230,16 +1246,13 @@ function animate() {
             ledMatBottom.uniforms.uNextTheme.value = nextTheme;
         }
     } else {
-        // Transition spans 10 seconds total
         transitionProgress += rawDt / 10.0;
         
-        // At the exact halfway mark (5 seconds), seamlessly switch the HTML UI class
         if (transitionProgress >= 0.5 && !uiUpdated) {
             document.body.className = 'theme-' + nextTheme;
             uiUpdated = true;
         }
         
-        // When the 10 second animation concludes, lock the new state in and reset
         if (transitionProgress >= 1.0) {
             transitionProgress = 1.0;
             currentTheme = nextTheme;
@@ -1253,7 +1266,6 @@ function animate() {
         }
     }
     
-    // Apply a smoothstep ease to the 10-second transition for a buttery fade
     let ease = transitionProgress * transitionProgress * (3.0 - 2.0 * transitionProgress);
     themePass.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
     hallucinationPass.material.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
@@ -1262,15 +1274,16 @@ function animate() {
 
 
     // --- DYNAMIC BLOOM CROSSFADING ---
-    // Sets the destination targets for the bloom engine based on the theme
-    let targetBloomS = (currentTheme === 1) ? 0.6 : bloomStrength;
-    let targetBloomT = (currentTheme === 1) ? 0.5 : bloomThreshold;
+    let getBloomS = (t) => (t === 1) ? 0.6 : bloomStrength;
+    let getBloomT = (t) => (t === 1) ? 0.5 : bloomThreshold;
+
+    let targetBloomS = getBloomS(currentTheme);
+    let targetBloomT = getBloomT(currentTheme);
 
     if (isTransitioning) {
-        let nextBloomS = (nextTheme === 1) ? 0.6 : bloomStrength;
-        let nextBloomT = (nextTheme === 1) ? 0.5 : bloomThreshold;
+        let nextBloomS = getBloomS(nextTheme);
+        let nextBloomT = getBloomT(nextTheme);
         
-        // Smoothly interpolates the glow intensity mid-transition
         let blendS = targetBloomS + (nextBloomS - targetBloomS) * ease;
         let blendT = targetBloomT + (nextBloomT - targetBloomT) * ease;
         
@@ -1280,7 +1293,6 @@ function animate() {
         bloomPass.strength += (targetBloomS - bloomPass.strength) * 0.05;
         bloomPass.threshold += (targetBloomT - bloomPass.threshold) * 0.05;
     }
-
 
     pMat.uniforms.uHtSize.value = HALFTONE_CONFIG.size;
     pMat.uniforms.uHtRotation.value = HALFTONE_CONFIG.rotation;

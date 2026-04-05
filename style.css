@@ -343,3 +343,34 @@ body.theme-4 .modal-logo {
 body.theme-4 #glitch-text span {
     color: #d91a1a !important;
 }
+
+/* --- THEME 5: ASCII MAINFRAME --- */
+body.theme-5 .social-link {
+    animation: none;
+    stroke: #54ff7f;
+    color: #54ff7f;
+}
+body.theme-5 .social-link svg {
+    stroke: rgba(0, 255, 65, 0.5);
+}
+body.theme-5 .social-link:hover svg {
+    stroke: #54ff7f;
+    filter: drop-shadow(0 0 15px #00ff41);
+}
+body.theme-5 .social-link::after {
+    background: rgba(0, 20, 5, 0.85);
+    border-color: rgba(0, 255, 65, 0.3);
+    color: #54ff7f;
+}
+body.theme-5 #info-modal {
+    background: rgba(0, 20, 5, 0.85);
+    border-color: rgba(0, 255, 65, 0.3);
+    color: #54ff7f;
+}
+body.theme-5 .modal-logo {
+    background: #54ff7f; 
+    animation: none;
+}
+body.theme-5 #glitch-text span {
+    color: #54ff7f !important;
+}
