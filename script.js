@@ -41,9 +41,9 @@ const isMobile = window.innerWidth <= 768; // Kept solely for touch velocity mat
 
 // Visually locked to the clean, crisp rendering state permanently 
 // to prevent chunky moiré loads on mobile devices.
-const bloomStrength = 1.5;
-const bloomRadius = 5.0;
-const bloomThreshold = 3.0;
+const bloomStrength = 0.25;
+const bloomRadius = 2.0;
+const bloomThreshold = 2.0;
 
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, bloomRadius, bloomThreshold);
 composer.addPass(renderScene);
@@ -86,7 +86,7 @@ scene.add(orb);
 
 // 2. The Invisible Hitbox
 const hitBox = new THREE.Mesh(
-    new THREE.SphereGeometry(3.5, 16, 16),
+    new THREE.SphereGeometry(1.5, 16, 16),
     new THREE.MeshBasicMaterial({ visible: false })
 );
 scene.add(hitBox);
@@ -707,7 +707,7 @@ const pMat = new THREE.ShaderMaterial({
             
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
             // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
-            gl_PointSize = (100.0 * aRand.x + 200.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / max(0.1, -mvPosition.z));
+            gl_PointSize = (200.0 * aRand.x + 1.0) * burstShrink * sin(normalizedAge * 3.14) * (30.0 / max(0.1, -mvPosition.z));
 
             vec3 magenta = vec3(2.5, 0.0, 2.5);
             vec3 green = vec3(0.0, 2.5, 0.0); 
