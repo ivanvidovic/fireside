@@ -218,96 +218,128 @@ body {
    THEME OVERRIDES FOR HTML UI LAYER
    ========================================================================== */
 
-/* --- THEME 1: TACTICAL RED NIGHT MODE --- */
+/* --- THEME 1: BLACK LIGHT MODE --- */
 body.theme-1 .social-link {
     animation: none;
-    stroke: #d91a1a;
-    color: #d91a1a;
+    stroke: #ff3300;
+    color: #ff3300;
 }
 body.theme-1 .social-link svg {
-    stroke: rgba(217, 26, 26, 0.5);
+    stroke: rgba(255, 51, 0, 0.5);
 }
 body.theme-1 .social-link:hover svg {
-    stroke: #d91a1a;
-    filter: drop-shadow(0 0 15px #d91a1a);
+    stroke: #ff3300;
+    filter: drop-shadow(0 0 15px #ff3300);
 }
 body.theme-1 .social-link::after {
-    background: rgba(15, 0, 0, 0.85);
-    border-color: rgba(217, 26, 26, 0.3);
-    color: #d91a1a;
+    background: rgba(20, 0, 30, 0.85);
+    border-color: rgba(255, 51, 0, 0.3);
+    color: #ff3300;
 }
 body.theme-1 #info-modal {
-    background: rgba(15, 0, 0, 0.85);
-    border-color: rgba(217, 26, 26, 0.3);
-    color: #d91a1a;
+    background: rgba(20, 0, 30, 0.85);
+    border-color: rgba(255, 51, 0, 0.3);
+    color: #ff3300;
 }
 body.theme-1 .modal-logo {
-    background: #d91a1a; /* Solid red instead of neon gradient */
-    animation: none;
-}
-body.theme-1 #glitch-text span {
-    color: #d91a1a !important;
-}
-
-/* --- THEME 2: HALLUCINATION MODE --- */
-body.theme-2 .social-link {
-    animation: none;
-    stroke: #00ffff;
-    color: #00ffff;
-}
-body.theme-2 .social-link svg {
-    stroke: rgba(0, 255, 255, 0.5);
-}
-body.theme-2 .social-link:hover svg {
-    stroke: #ff00ff;
-    filter: drop-shadow(0 0 15px #ff00ff);
-}
-body.theme-2 .social-link::after {
-    background: rgba(20, 0, 20, 0.85);
-    border-color: rgba(255, 0, 255, 0.3);
-    color: #00ffff;
-}
-body.theme-2 #info-modal {
-    background: rgba(20, 0, 20, 0.85);
-    border-color: rgba(255, 0, 255, 0.3);
-    color: #00ffff;
-}
-body.theme-2 .modal-logo {
-    background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff);
+    background: linear-gradient(90deg, #6600cc, #ff3300, #6600cc);
     background-size: 200% 200%;
     animation: gradient-undulate 1.5s ease-in-out infinite;
 }
-body.theme-2 #glitch-text span {
-    color: #ff00ff !important;
+body.theme-1 #glitch-text span {
+    color: #ff3300 !important;
 }
 
-/* --- THEME 3: E-INK LIGHT MODE --- */
-body.theme-3 .social-link {
+/* --- THEME 2: E-INK LIGHT MODE --- */
+body.theme-2 .social-link {
     animation: none;
     stroke: #26262b;
     color: #26262b;
 }
-body.theme-3 .social-link svg {
+body.theme-2 .social-link svg {
     stroke: rgba(38, 38, 43, 0.5);
 }
-body.theme-3 .social-link:hover svg {
+body.theme-2 .social-link:hover svg {
     stroke: #26262b;
     filter: none;
 }
-body.theme-3 .social-link::after {
+body.theme-2 .social-link::after {
     background: rgba(235, 230, 224, 0.85);
     border-color: rgba(38, 38, 43, 0.2);
     color: #26262b;
 }
-body.theme-3 #info-modal {
+body.theme-2 #info-modal {
     background: rgba(235, 230, 224, 0.85);
     border-color: rgba(38, 38, 43, 0.3);
     color: #26262b;
 }
-body.theme-3 .modal-logo {
-    background: #26262b; /* Solid dark color instead of neon gradient */
+body.theme-2 .modal-logo {
+    background: #26262b; 
     animation: none;
 }
-body.theme-3 #glitch-text span {
+body.theme-2 #glitch-text span {
     color: #26262b !important;
+}
+
+/* --- THEME 3: HALLUCINATION MODE --- */
+body.theme-3 .social-link {
+    animation: none;
+    stroke: #00ffff;
+    color: #00ffff;
+}
+body.theme-3 .social-link svg {
+    stroke: rgba(0, 255, 255, 0.5);
+}
+body.theme-3 .social-link:hover svg {
+    stroke: #ff00ff;
+    filter: drop-shadow(0 0 15px #ff00ff);
+}
+body.theme-3 .social-link::after {
+    background: rgba(20, 0, 20, 0.85);
+    border-color: rgba(255, 0, 255, 0.3);
+    color: #00ffff;
+}
+body.theme-3 #info-modal {
+    background: rgba(20, 0, 20, 0.85);
+    border-color: rgba(255, 0, 255, 0.3);
+    color: #00ffff;
+}
+body.theme-3 .modal-logo {
+    background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff);
+    background-size: 200% 200%;
+    animation: gradient-undulate 1.5s ease-in-out infinite;
+}
+body.theme-3 #glitch-text span {
+    color: #ff00ff !important;
+}
+
+/* --- THEME 4: TACTICAL RED NIGHT MODE --- */
+body.theme-4 .social-link {
+    animation: none;
+    stroke: #d91a1a;
+    color: #d91a1a;
+}
+body.theme-4 .social-link svg {
+    stroke: rgba(217, 26, 26, 0.5);
+}
+body.theme-4 .social-link:hover svg {
+    stroke: #d91a1a;
+    filter: drop-shadow(0 0 15px #d91a1a);
+}
+body.theme-4 .social-link::after {
+    background: rgba(15, 0, 0, 0.85);
+    border-color: rgba(217, 26, 26, 0.3);
+    color: #d91a1a;
+}
+body.theme-4 #info-modal {
+    background: rgba(15, 0, 0, 0.85);
+    border-color: rgba(217, 26, 26, 0.3);
+    color: #d91a1a;
+}
+body.theme-4 .modal-logo {
+    background: #d91a1a; 
+    animation: none;
+}
+body.theme-4 #glitch-text span {
+    color: #d91a1a !important;
 }

@@ -40,7 +40,7 @@ const composer = new EffectComposer(renderer, renderTarget);
 const renderScene = new RenderPass(scene, camera);
 
 // --- UNIFIED VISUAL STATE & BLOOM LOGIC ---
-const isMobile = window.innerWidth <= 768; // Kept solely for touch velocity math
+const isMobile = window.innerWidth <= 768; 
 
 const bloomStrength = 0.25;
 const bloomRadius = 2.0;
@@ -68,7 +68,9 @@ class HallucinationPass extends Pass {
             uniforms: {
                 tDiffuse: { value: null },
                 tAccum: { value: null },
-                uTheme: { value: 0 }
+                uTheme: { value: 0 },
+                uNextTheme: { value: 0 }, 
+                uTransition: { value: 0.0 }
             },
             vertexShader: `
                 varying vec2 vUv;
@@ -81,13 +83,22 @@ class HallucinationPass extends Pass {
                 uniform sampler2D tDiffuse;
                 uniform sampler2D tAccum;
                 uniform int uTheme;
+                uniform int uNextTheme;
+                uniform float uTransition;
                 varying vec2 vUv;
+
+                float getTrailStrength(int t) {
+                    if (t == 3) return 0.94; // Hallucination Mode
+                    if (t == 1) return 0.82; // Faint Black Light Trace
+                    return 0.0;
+                }
 
                 void main() {
                     vec4 texColor = texture2D(tDiffuse, vUv);
 
-                    // FIXED: Hallucination mode is now correctly Theme 2
-                    if (uTheme != 2) {
+                    float currentStrength = mix(getTrailStrength(uTheme), getTrailStrength(uNextTheme), uTransition);
+
+                    if (currentStrength <= 0.01) {
                         gl_FragColor = texColor;
                         return;
                     }
@@ -103,7 +114,7 @@ class HallucinationPass extends Pass {
                     float g = texture2D(tAccum, gUv).g;
                     float b = texture2D(tAccum, bUv).b;
                     
-                    vec3 trail = vec3(r, g, b) * 0.94;
+                    vec3 trail = vec3(r, g, b) * currentStrength;
 
                     gl_FragColor = vec4(max(texColor.rgb, trail), 1.0);
                 }
@@ -147,6 +158,8 @@ const themeShader = {
     uniforms: {
         tDiffuse: { value: null },
         uTheme: { value: 0 }, 
+        uNextTheme: { value: 0 }, 
+        uTransition: { value: 0.0 },
         uTime: { value: 0 }
     },
     vertexShader: `
@@ -159,6 +172,8 @@ const themeShader = {
     fragmentShader: `
         uniform sampler2D tDiffuse;
         uniform int uTheme;
+        uniform int uNextTheme;
+        uniform float uTransition;
         uniform float uTime;
         varying vec2 vUv;
 
@@ -166,38 +181,50 @@ const themeShader = {
             return dot(color, vec3(0.299, 0.587, 0.114));
         }
 
+        vec3 getThemeColor(int t, vec3 rawColor, float lum, float scanline) {
+            // FIXED THEME INTEGER MAPPING HERE
+            if (t == 2) {
+                // THEME 2: E-INK LIGHT MODE
+                vec3 bgEink = vec3(0.92, 0.90, 0.88); 
+                vec3 fgEink = vec3(0.15, 0.15, 0.17); 
+                float mixVal = smoothstep(0.05, 0.5, lum);
+                return mix(bgEink, fgEink, mixVal) - scanline; 
+                
+            } else if (t == 4) {
+                // THEME 4: TACTICAL RED NIGHT MODE
+                vec3 bgNight = vec3(0.0, 0.0, 0.0); 
+                vec3 fgNight = vec3(0.85, 0.1, 0.1); 
+                float mixVal = smoothstep(0.0, 0.6, lum);
+                return mix(bgNight, fgNight, mixVal) - scanline; 
+                
+            } else if (t == 1) {
+                // THEME 1: BLACK LIGHT MODE
+                vec3 deepPurple = vec3(0.5, 0.0, 1.0) * lum * 1.5;
+                vec3 hotPink = vec3(1.0, 0.0, 0.8) * smoothstep(0.4, 1.5, lum) * 1.2;
+                vec3 purpleWash = deepPurple + hotPink;
+                
+                float orangeScore = (rawColor.r * rawColor.g) - (rawColor.b * 2.0);
+                float isOrange = smoothstep(0.1, 0.5, orangeScore);
+                
+                return mix(purpleWash, rawColor, isOrange); // No scanlines
+            }
+            
+            // Themes 0 (Default) and 3 (Hallucination) simply pass raw color
+            return rawColor;
+        }
+
         void main() {
             vec4 texColor = texture2D(tDiffuse, vUv);
-
-            // FIXED: Let Theme 0 (Default) and Theme 2 (Hallucination) pass through unaltered
-            if (uTheme == 0 || uTheme == 2) {
-                gl_FragColor = texColor;
-                return;
-            }
-
             float lum = luminance(texColor.rgb);
             float scanline = sin(gl_FragCoord.y * 1.5) * 0.04;
 
-            // FIXED: Corrected mapping (3 = E-Ink, 1 = Red)
-            if (uTheme == 3) {
-                vec3 bgEink = vec3(0.92, 0.90, 0.88); 
-                vec3 fgEink = vec3(0.15, 0.15, 0.17); 
-                
-                float mixVal = smoothstep(0.05, 0.5, lum);
-                vec3 finalColor = mix(bgEink, fgEink, mixVal);
-                
-                finalColor -= scanline; 
-                gl_FragColor = vec4(finalColor, 1.0);
-                
-            } else if (uTheme == 1) {
-                vec3 bgNight = vec3(0.0, 0.0, 0.0); 
-                vec3 fgNight = vec3(0.85, 0.1, 0.1); 
-                
-                float mixVal = smoothstep(0.0, 0.6, lum);
-                vec3 finalColor = mix(bgNight, fgNight, mixVal);
-                
-                finalColor -= scanline; 
-                gl_FragColor = vec4(finalColor, 1.0);
+            vec3 colorCurrent = getThemeColor(uTheme, texColor.rgb, lum, scanline);
+            
+            if (uTransition > 0.0) {
+                vec3 colorNext = getThemeColor(uNextTheme, texColor.rgb, lum, scanline);
+                gl_FragColor = vec4(mix(colorCurrent, colorNext, uTransition), 1.0);
+            } else {
+                gl_FragColor = vec4(colorCurrent, 1.0);
             }
         }
     `
@@ -293,7 +320,9 @@ const ledMat = new THREE.ShaderMaterial({
     uniforms: {
         tText: { value: ledTexture },
         uTime: { value: 0 },
-        uTheme: { value: 0 } 
+        uTheme: { value: 0 },
+        uNextTheme: { value: 0 },
+        uTransition: { value: 0.0 }
     },
     transparent: true,
     side: THREE.DoubleSide, 
@@ -310,7 +339,15 @@ const ledMat = new THREE.ShaderMaterial({
         uniform sampler2D tText;
         uniform float uTime;
         uniform int uTheme; 
+        uniform int uNextTheme; 
+        uniform float uTransition; 
         varying vec2 vUv;
+
+        vec3 getLEDColor(int t) {
+            if (t == 3) return vec3(0.0, 0.0, 5.0); // Hallucination Blue
+            if (t == 1) return vec3(6.0, 0.5, 0.0); // Black Light Orange
+            return vec3(0.0, 5.0, 0.0);             // Default Green
+        }
 
         void main() {
             float rows = 24.0;   
@@ -332,13 +369,11 @@ const ledMat = new THREE.ShaderMaterial({
             
             if (finalAlpha < 0.01) discard; 
             
-            vec3 ledColor = vec3(0.0, 5.0, 0.0); 
-            // FIXED: Pure Blue override maps to Theme 2 (Hallucination)
-            if (uTheme == 2) {
-                ledColor = vec3(0.0, 0.0, 5.0); 
-            }
+            vec3 c1 = getLEDColor(uTheme);
+            vec3 c2 = getLEDColor(uNextTheme);
+            vec3 finalLedColor = mix(c1, c2, uTransition);
             
-            gl_FragColor = vec4(ledColor, finalAlpha);
+            gl_FragColor = vec4(finalLedColor, finalAlpha);
         }
     `
 });
@@ -392,7 +427,9 @@ const ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
         tText: { value: ledTextureBottom },
         uTime: { value: 0 },
-        uTheme: { value: 0 } 
+        uTheme: { value: 0 },
+        uNextTheme: { value: 0 },
+        uTransition: { value: 0.0 }
     },
     transparent: true,
     side: THREE.DoubleSide, 
@@ -409,7 +446,15 @@ const ledMatBottom = new THREE.ShaderMaterial({
         uniform sampler2D tText;
         uniform float uTime;
         uniform int uTheme; 
+        uniform int uNextTheme; 
+        uniform float uTransition; 
         varying vec2 vUv;
+
+        vec3 getLEDColor(int t) {
+            if (t == 3) return vec3(0.0, 0.0, 2.5); // Hallucination Blue
+            if (t == 1) return vec3(4.0, 0.4, 0.0); // Black Light Orange
+            return vec3(0.0, 2.5, 0.0);             // Default Green
+        }
 
         void main() {
             float rows = 17.0;   
@@ -431,13 +476,11 @@ const ledMatBottom = new THREE.ShaderMaterial({
             
             if (finalAlpha < 0.01) discard; 
             
-            vec3 ledColor = vec3(0.0, 2.5, 0.0); 
-            // FIXED: Pure Blue override maps to Theme 2 (Hallucination)
-            if (uTheme == 2) {
-                ledColor = vec3(0.0, 0.0, 2.5); 
-            }
+            vec3 c1 = getLEDColor(uTheme);
+            vec3 c2 = getLEDColor(uNextTheme);
+            vec3 finalLedColor = mix(c1, c2, uTransition);
             
-            gl_FragColor = vec4(ledColor, finalAlpha);
+            gl_FragColor = vec4(finalLedColor, finalAlpha);
         }
     `
 });
@@ -448,20 +491,46 @@ const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
 ledRingBottom.position.y = -0.45; 
 ledRing.add(ledRingBottom);
 
-// --- THEME TOGGLE STATE & UI HOOK ---
+
+// --- STATE MANAGERS & AUTO-TRANSITION LOGIC ---
 let currentTheme = 0;
+let nextTheme = 0;
+let isTransitioning = false;
+let transitionProgress = 0.0;
+let idleTimer = 0.0;
+let uiUpdated = false;
+
 const themeBtn = document.getElementById('theme-btn');
 if (themeBtn) {
     themeBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        // CYCLES 4 MODES: 0 (Default) -> 1 (Red) -> 2 (Hallucination) -> 3 (E-Ink)
-        currentTheme = (currentTheme + 1) % 4; 
         
+        // Manual override: Instantly snap to the destination if mid-transition
+        if (isTransitioning) {
+            currentTheme = nextTheme;
+        }
+        
+        // Cycle the next theme manually
+        currentTheme = (currentTheme + 1) % 5; 
+        
+        // Reset timers and disable the automatic transition crossfade
+        isTransitioning = false;
+        transitionProgress = 0.0;
+        idleTimer = 0.0; 
+        uiUpdated = false;
+        
+        // Tell shaders to snap instantly
         themePass.uniforms.uTheme.value = currentTheme;
+        themePass.uniforms.uTransition.value = 0.0;
+        
         hallucinationPass.material.uniforms.uTheme.value = currentTheme;
+        hallucinationPass.material.uniforms.uTransition.value = 0.0;
         
         ledMat.uniforms.uTheme.value = currentTheme;
+        ledMat.uniforms.uTransition.value = 0.0;
+        
         ledMatBottom.uniforms.uTheme.value = currentTheme;
+        ledMatBottom.uniforms.uTransition.value = 0.0;
 
         document.body.className = 'theme-' + currentTheme;
     });
@@ -924,7 +993,7 @@ const firePoints = new THREE.Points(pGeo, pMat);
 scene.add(firePoints);
 
 
-// --- GL শর্ DECRYPTER EFFECT & ANIMATION LOGIC ---
+// --- GLITCH DECRYPTER EFFECT & ANIMATION LOGIC ---
 class TextScramble {
     constructor(el) {
         this.el = el;
@@ -1054,6 +1123,9 @@ function handlePointerMove(e) {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
+    // Reset the Idle timer if the user moves their mouse around the scene
+    if (!isTransitioning) idleTimer = 0.0;
+    
     const cameraDir = new THREE.Vector3();
     camera.getWorldDirection(cameraDir);
     virtualPlane.setFromNormalAndCoplanarPoint(cameraDir.negate(), new THREE.Vector3(0, 0, 0));
@@ -1140,6 +1212,75 @@ function animate() {
     const visualDt = Math.min(rawDt, 0.05); 
     
     controls.update();
+
+    // --- AUTOMATED IDLE TRANSITION LOGIC ---
+    if (!isTransitioning) {
+        idleTimer += rawDt;
+        
+        // Every 30 seconds, trigger the automated crossfade to the next mode
+        if (idleTimer >= 30.0) {
+            isTransitioning = true;
+            nextTheme = (currentTheme + 1) % 5;
+            transitionProgress = 0.0;
+            uiUpdated = false;
+            
+            themePass.uniforms.uNextTheme.value = nextTheme;
+            hallucinationPass.material.uniforms.uNextTheme.value = nextTheme;
+            ledMat.uniforms.uNextTheme.value = nextTheme;
+            ledMatBottom.uniforms.uNextTheme.value = nextTheme;
+        }
+    } else {
+        // Transition spans 10 seconds total
+        transitionProgress += rawDt / 10.0;
+        
+        // At the exact halfway mark (5 seconds), seamlessly switch the HTML UI class
+        if (transitionProgress >= 0.5 && !uiUpdated) {
+            document.body.className = 'theme-' + nextTheme;
+            uiUpdated = true;
+        }
+        
+        // When the 10 second animation concludes, lock the new state in and reset
+        if (transitionProgress >= 1.0) {
+            transitionProgress = 1.0;
+            currentTheme = nextTheme;
+            isTransitioning = false;
+            idleTimer = 0.0;
+            
+            themePass.uniforms.uTheme.value = currentTheme;
+            hallucinationPass.material.uniforms.uTheme.value = currentTheme;
+            ledMat.uniforms.uTheme.value = currentTheme;
+            ledMatBottom.uniforms.uTheme.value = currentTheme;
+        }
+    }
+    
+    // Apply a smoothstep ease to the 10-second transition for a buttery fade
+    let ease = transitionProgress * transitionProgress * (3.0 - 2.0 * transitionProgress);
+    themePass.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
+    hallucinationPass.material.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
+    ledMat.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
+    ledMatBottom.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
+
+
+    // --- DYNAMIC BLOOM CROSSFADING ---
+    // Sets the destination targets for the bloom engine based on the theme
+    let targetBloomS = (currentTheme === 1) ? 0.6 : bloomStrength;
+    let targetBloomT = (currentTheme === 1) ? 0.5 : bloomThreshold;
+
+    if (isTransitioning) {
+        let nextBloomS = (nextTheme === 1) ? 0.6 : bloomStrength;
+        let nextBloomT = (nextTheme === 1) ? 0.5 : bloomThreshold;
+        
+        // Smoothly interpolates the glow intensity mid-transition
+        let blendS = targetBloomS + (nextBloomS - targetBloomS) * ease;
+        let blendT = targetBloomT + (nextBloomT - targetBloomT) * ease;
+        
+        bloomPass.strength += (blendS - bloomPass.strength) * 0.05;
+        bloomPass.threshold += (blendT - bloomPass.threshold) * 0.05;
+    } else {
+        bloomPass.strength += (targetBloomS - bloomPass.strength) * 0.05;
+        bloomPass.threshold += (targetBloomT - bloomPass.threshold) * 0.05;
+    }
+
 
     pMat.uniforms.uHtSize.value = HALFTONE_CONFIG.size;
     pMat.uniforms.uHtRotation.value = HALFTONE_CONFIG.rotation;
