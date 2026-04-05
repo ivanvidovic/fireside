@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
 
 const HALFTONE_CONFIG = { size: 0.6, rotation: Math.PI / 8, shape: 0 };
@@ -39,8 +41,6 @@ const renderScene = new RenderPass(scene, camera);
 // --- UNIFIED VISUAL STATE & BLOOM LOGIC ---
 const isMobile = window.innerWidth <= 768; // Kept solely for touch velocity math
 
-// Visually locked to the clean, crisp rendering state permanently 
-// to prevent chunky moiré loads on mobile devices.
 const bloomStrength = 0.25;
 const bloomRadius = 2.0;
 const bloomThreshold = 2.0;
@@ -48,6 +48,163 @@ const bloomThreshold = 2.0;
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, bloomRadius, bloomThreshold);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
+
+
+// --- TEMPORAL ACCUMULATION: HALLUCINATION PASS ---
+class HallucinationPass extends Pass {
+    constructor() {
+        super();
+        this.accumTarget1 = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { 
+            type: THREE.HalfFloatType, format: THREE.RGBAFormat 
+        });
+        this.accumTarget2 = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { 
+            type: THREE.HalfFloatType, format: THREE.RGBAFormat 
+        });
+        this.readTarget = this.accumTarget1;
+        this.writeTarget = this.accumTarget2;
+
+        this.material = new THREE.ShaderMaterial({
+            uniforms: {
+                tDiffuse: { value: null },
+                tAccum: { value: null },
+                uTheme: { value: 0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform sampler2D tAccum;
+                uniform int uTheme;
+                varying vec2 vUv;
+
+                void main() {
+                    vec4 texColor = texture2D(tDiffuse, vUv);
+
+                    // FIXED: Hallucination mode is now correctly Theme 2
+                    if (uTheme != 2) {
+                        gl_FragColor = texColor;
+                        return;
+                    }
+
+                    vec2 dir = vUv - vec2(0.5);
+                    float dist = length(dir);
+                    
+                    vec2 rUv = vUv - dir * 0.015 * dist;
+                    vec2 gUv = vUv - dir * 0.007 * dist;
+                    vec2 bUv = vUv; 
+
+                    float r = texture2D(tAccum, rUv).r;
+                    float g = texture2D(tAccum, gUv).g;
+                    float b = texture2D(tAccum, bUv).b;
+                    
+                    vec3 trail = vec3(r, g, b) * 0.94;
+
+                    gl_FragColor = vec4(max(texColor.rgb, trail), 1.0);
+                }
+            `
+        });
+
+        this.fsQuad = new FullScreenQuad(this.material);
+    }
+
+    render(renderer, writeBuffer, readBuffer) {
+        this.material.uniforms.tDiffuse.value = readBuffer.texture;
+        this.material.uniforms.tAccum.value = this.readTarget.texture;
+
+        renderer.setRenderTarget(this.writeTarget);
+        this.fsQuad.render(renderer);
+
+        if (this.renderToScreen) {
+            renderer.setRenderTarget(null);
+        } else {
+            renderer.setRenderTarget(writeBuffer);
+        }
+        this.fsQuad.render(renderer);
+
+        let temp = this.readTarget;
+        this.readTarget = this.writeTarget;
+        this.writeTarget = temp;
+    }
+
+    setSize(width, height) {
+        this.accumTarget1.setSize(width, height);
+        this.accumTarget2.setSize(width, height);
+    }
+}
+
+const hallucinationPass = new HallucinationPass();
+composer.addPass(hallucinationPass);
+
+
+// --- THEME ENGINE: POST-PROCESSING LENS ---
+const themeShader = {
+    uniforms: {
+        tDiffuse: { value: null },
+        uTheme: { value: 0 }, 
+        uTime: { value: 0 }
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform int uTheme;
+        uniform float uTime;
+        varying vec2 vUv;
+
+        float luminance(vec3 color) {
+            return dot(color, vec3(0.299, 0.587, 0.114));
+        }
+
+        void main() {
+            vec4 texColor = texture2D(tDiffuse, vUv);
+
+            // FIXED: Let Theme 0 (Default) and Theme 2 (Hallucination) pass through unaltered
+            if (uTheme == 0 || uTheme == 2) {
+                gl_FragColor = texColor;
+                return;
+            }
+
+            float lum = luminance(texColor.rgb);
+            float scanline = sin(gl_FragCoord.y * 1.5) * 0.04;
+
+            // FIXED: Corrected mapping (3 = E-Ink, 1 = Red)
+            if (uTheme == 3) {
+                vec3 bgEink = vec3(0.92, 0.90, 0.88); 
+                vec3 fgEink = vec3(0.15, 0.15, 0.17); 
+                
+                float mixVal = smoothstep(0.05, 0.5, lum);
+                vec3 finalColor = mix(bgEink, fgEink, mixVal);
+                
+                finalColor -= scanline; 
+                gl_FragColor = vec4(finalColor, 1.0);
+                
+            } else if (uTheme == 1) {
+                vec3 bgNight = vec3(0.0, 0.0, 0.0); 
+                vec3 fgNight = vec3(0.85, 0.1, 0.1); 
+                
+                float mixVal = smoothstep(0.0, 0.6, lum);
+                vec3 finalColor = mix(bgNight, fgNight, mixVal);
+                
+                finalColor -= scanline; 
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        }
+    `
+};
+
+const themePass = new ShaderPass(themeShader);
+composer.addPass(themePass);
+
 
 const envScene = new THREE.Scene();
 const envGeo = new THREE.SphereGeometry(50, 64, 64);
@@ -134,7 +291,8 @@ updateMarqueeText("Fireside [Meetup]");
 const ledMat = new THREE.ShaderMaterial({
     uniforms: {
         tText: { value: ledTexture },
-        uTime: { value: 0 }
+        uTime: { value: 0 },
+        uTheme: { value: 0 } 
     },
     transparent: true,
     side: THREE.DoubleSide, 
@@ -150,6 +308,7 @@ const ledMat = new THREE.ShaderMaterial({
     fragmentShader: `
         uniform sampler2D tText;
         uniform float uTime;
+        uniform int uTheme; 
         varying vec2 vUv;
 
         void main() {
@@ -159,7 +318,6 @@ const ledMat = new THREE.ShaderMaterial({
             vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
             vec2 sampleUv = gridUv;
             
-            // Top Line
             sampleUv.x += uTime * 0.01; 
             
             vec4 textData = texture2D(tText, sampleUv);
@@ -174,6 +332,11 @@ const ledMat = new THREE.ShaderMaterial({
             if (finalAlpha < 0.01) discard; 
             
             vec3 ledColor = vec3(0.0, 5.0, 0.0); 
+            // FIXED: Pure Blue override maps to Theme 2 (Hallucination)
+            if (uTheme == 2) {
+                ledColor = vec3(0.0, 0.0, 5.0); 
+            }
+            
             gl_FragColor = vec4(ledColor, finalAlpha);
         }
     `
@@ -227,7 +390,8 @@ updateMarqueeBottom("Thursday April 23rd @ 7:00PM inside Goodies Snack Shop on 1
 const ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
         tText: { value: ledTextureBottom },
-        uTime: { value: 0 }
+        uTime: { value: 0 },
+        uTheme: { value: 0 } 
     },
     transparent: true,
     side: THREE.DoubleSide, 
@@ -243,6 +407,7 @@ const ledMatBottom = new THREE.ShaderMaterial({
     fragmentShader: `
         uniform sampler2D tText;
         uniform float uTime;
+        uniform int uTheme; 
         varying vec2 vUv;
 
         void main() {
@@ -252,7 +417,6 @@ const ledMatBottom = new THREE.ShaderMaterial({
             vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
             vec2 sampleUv = gridUv;
             
-            // Bottom Line 
             sampleUv.x += uTime * 0.03; 
             
             vec4 textData = texture2D(tText, sampleUv);
@@ -261,14 +425,17 @@ const ledMatBottom = new THREE.ShaderMaterial({
             float ledRadius = 0.25; 
             float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
             
-            // INVERTED LOGIC: 1.0 - step() makes black canvas pixels ON, and white text pixels OFF
             float isOn = 1.0 - step(0.5, textData.r);
             float finalAlpha = ledMask * isOn;
             
             if (finalAlpha < 0.01) discard; 
             
-            // Dialed back slightly to 2.5 because 90% of the LEDs are now on, keeping the bloom controlled
             vec3 ledColor = vec3(0.0, 2.5, 0.0); 
+            // FIXED: Pure Blue override maps to Theme 2 (Hallucination)
+            if (uTheme == 2) {
+                ledColor = vec3(0.0, 0.0, 2.5); 
+            }
+            
             gl_FragColor = vec4(ledColor, finalAlpha);
         }
     `
@@ -277,22 +444,36 @@ const ledMatBottom = new THREE.ShaderMaterial({
 const ledGeoBottom = new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true);
 const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
 
-// The bottom ring is a direct child of the top ring so they scale together.
-// The Y-position is now relative to the top ring (2.55 - 3.0 = -0.45).
 ledRingBottom.position.y = -0.45; 
 ledRing.add(ledRingBottom);
 
+// --- THEME TOGGLE STATE & UI HOOK ---
+let currentTheme = 0;
+const themeBtn = document.getElementById('theme-btn');
+if (themeBtn) {
+    themeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        // CYCLES 4 MODES: 0 (Default) -> 1 (Red) -> 2 (Hallucination) -> 3 (E-Ink)
+        currentTheme = (currentTheme + 1) % 4; 
+        
+        themePass.uniforms.uTheme.value = currentTheme;
+        hallucinationPass.material.uniforms.uTheme.value = currentTheme;
+        
+        ledMat.uniforms.uTheme.value = currentTheme;
+        ledMatBottom.uniforms.uTheme.value = currentTheme;
+
+        document.body.className = 'theme-' + currentTheme;
+    });
+}
 
 // --- RESPONSIVE CAMERA LOGIC (Moiré Fix) ---
 function updateResponsiveCamera() {
     const aspect = window.innerWidth / window.innerHeight;
     const scaleFactor = Math.min(1.0, aspect * 1.45); 
-    
-    // Default FOV is 45. We increase it proportionally as the screen gets narrower.
     camera.fov = 45 / scaleFactor;
     camera.updateProjectionMatrix();
 }
-updateResponsiveCamera(); // Call once on initialization
+updateResponsiveCamera(); 
 
 
 // --- 3. SHIMMERING STARFIELD (FLOOR) ---
@@ -344,17 +525,13 @@ const starMat = new THREE.ShaderMaterial({
             
             vAlpha = falloff * twinkle;
             
-            // Base size adjusted to 1.0 for finer stars
             float baseSize = 2.0 + mod(aSeed, 1.0);
-            
-            // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
             gl_PointSize = (baseSize * falloff) * (15.0 / max(0.1, -mvPosition.z));
         }
     `,
     fragmentShader: `
         varying float vAlpha;
         void main() {
-            // Cut standard square gl_Point into a soft circle
             vec2 coord = gl_PointCoord - vec2(0.5);
             float dist = length(coord);
             if (dist > 0.5) discard;
@@ -382,12 +559,10 @@ const trafficPos = new Float32Array(trafficCount * 3);
 const trafficColor = new Float32Array(trafficCount * 3);
 const trafficSize = new Float32Array(trafficCount);
 
-// Flat data array instead of class instances for memory stability
 const cars = [];
 const DIRS = [[1,0], [-1,0], [0,1], [0,-1]];
 
 for(let i=0; i<trafficCount; i++) {
-    // Snap starting positions to exact intersections on the grid
     let startX = Math.round((Math.random() - 0.5) * (trafficRadius * 1.5) / laneSpacing) * laneSpacing;
     let startZ = Math.round((Math.random() - 0.5) * (trafficRadius * 1.5) / laneSpacing) * laneSpacing;
     
@@ -400,23 +575,21 @@ for(let i=0; i<trafficCount; i++) {
         targetZ: startZ + (dir[1] * laneSpacing),
         dirX: dir[0],
         dirZ: dir[1],
-        speed: 0.05 + Math.random() * 1.0, // Base speed variations
-        state: Math.random() > 0.5 ? 1 : 0, // 1 = MOVING, 0 = STOPPED
-        timer: Math.random() * 2.0 // Random stagger so they dont all start at once
+        speed: 0.05 + Math.random() * 1.0, 
+        state: Math.random() > 0.5 ? 1 : 0, 
+        timer: Math.random() * 2.0 
     });
 
     trafficPos[i*3 + 0] = startX;
     trafficPos[i*3 + 1] = 0;
     trafficPos[i*3 + 2] = startZ;
 
-    // 50/50 Green vs Magenta
     if (Math.random() > 0.5) {
         trafficColor[i*3]=5.0; trafficColor[i*3+1]=0.0; trafficColor[i*3+2]=5.0;
     } else {
         trafficColor[i*3]=0.0; trafficColor[i*3+1]=5.0; trafficColor[i*3+2]=0.0;
     }
 
-    // Tiny, varied sizes
     trafficSize[i] = 1.0 + Math.random() * 3.0; 
 }
 
@@ -447,7 +620,6 @@ const trafficMat = new THREE.ShaderMaterial({
             float falloff = smoothstep(uMaxRadius * 1.2, uMaxRadius * 0.2, dist);
             vAlpha = falloff;
             
-            // Safeguard division to prevent NaN camera crashes
             gl_PointSize = (aSize * falloff) * (20.0 / max(0.1, -mvPosition.z));
         }
     `,
@@ -466,13 +638,11 @@ const trafficMat = new THREE.ShaderMaterial({
 
 const trafficField = new THREE.Points(trafficGeo, trafficMat);
 trafficField.position.y = -3.5; 
-// FIX: Force rendering regardless of camera zoom to prevent vanishing bugs
 trafficField.frustumCulled = false; 
 scene.add(trafficField);
 
 
 // --- GPGPU SETUP (TRUE FLUID INERTIA) ---
-// Locked permanently to 64x64 (4096 particles)
 const WIDTH = 64; 
 const particleCount = WIDTH * WIDTH; 
 
@@ -706,7 +876,6 @@ const pMat = new THREE.ShaderMaterial({
             gl_Position = projectionMatrix * mvPosition;
             
             float burstShrink = 1.0 - (uBurst * aRand.x * 0.7); 
-            // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
             gl_PointSize = (200.0 * aRand.x + 1.0) * burstShrink * sin(normalizedAge * 3.14) * (30.0 / max(0.1, -mvPosition.z));
 
             vec3 magenta = vec3(2.5, 0.0, 2.5);
@@ -754,7 +923,7 @@ const firePoints = new THREE.Points(pGeo, pMat);
 scene.add(firePoints);
 
 
-// --- GLITCH DECRYPTER EFFECT & ANIMATION LOGIC ---
+// --- GL শর্ DECRYPTER EFFECT & ANIMATION LOGIC ---
 class TextScramble {
     constructor(el) {
         this.el = el;
@@ -897,8 +1066,6 @@ function handlePointerMove(e) {
             mouse3D.copy(intersectPoint);
             lastMouse3D.copy(intersectPoint);
         } else {
-            // FIX: Removed the desktop-only (!isMobile) restriction.
-            // Now touch/drag correctly updates the 3D position in real-time.
             targetMouseVel.subVectors(intersectPoint, lastMouse3D).multiplyScalar(3.0);
             mouse3D.copy(intersectPoint);
             
@@ -935,7 +1102,6 @@ function handleInteractionEnd() {
     targetScale = 1.0;
     targetBurst = 0.0; 
     
-    // FIX: Clear the "ghost finger" when you let go, so the particles settle back to base
     mouse3D.set(999, 999, 999);
     lastMouse3D.set(999, 999, 999);
 }
@@ -944,7 +1110,6 @@ window.addEventListener('pointermove', handlePointerMove);
 window.addEventListener('pointerdown', handleInteractionStart);
 window.addEventListener('pointerup', handleInteractionEnd);
 
-// Dynamic dimensions polling cache to entirely bypass DOM resize bugs
 let lastWidth = 0;
 let lastHeight = 0;
 
@@ -952,7 +1117,6 @@ let lastHeight = 0;
 function animate() {
     requestAnimationFrame(animate);
     
-    // --- CONTINUOUS RESIZE POLLING FIX ---
     if (window.innerWidth !== lastWidth || window.innerHeight !== lastHeight) {
         lastWidth = window.innerWidth;
         lastHeight = window.innerHeight;
@@ -965,6 +1129,8 @@ function animate() {
         renderer.setSize(lastWidth, lastHeight);
         renderTarget.setSize(lastWidth, lastHeight);
         composer.setSize(lastWidth, lastHeight);
+        
+        hallucinationPass.setSize(lastWidth, lastHeight);
     }
     
     const realTime = performance.now() * 0.001;
@@ -1001,39 +1167,35 @@ function animate() {
     const scaledDt = visualDt * currentSpeed;
     visualTime += scaledDt;
 
-    // --- UPDATE ALL ANIMATED SHADER TIMES ---
+    themePass.uniforms.uTime.value = visualTime;
+
     ledMat.uniforms.uTime.value = visualTime;
     ledMatBottom.uniforms.uTime.value = visualTime;
     starMat.uniforms.uTime.value = visualTime; 
 
-    // --- PURE JS TRAFFIC LOGIC (SAFE STOP & GO + TURNS) ---
     const tPositions = trafficField.geometry.attributes.position.array;
     
     for(let i = 0; i < trafficCount; i++) {
         let car = cars[i];
         
-        if (car.state === 0) { // 0 = STOPPED
+        if (car.state === 0) { 
             car.timer -= visualDt;
             if (car.timer <= 0) {
-                car.state = 1; // 1 = MOVING
+                car.state = 1; 
                 
-                // Valid directions (prevent exact U-turns)
                 const possibleDirs = [];
                 if (car.dirX !== -1) possibleDirs.push([1,0]);
                 if (car.dirX !== 1) possibleDirs.push([-1,0]);
                 if (car.dirZ !== -1) possibleDirs.push([0,1]);
                 if (car.dirZ !== 1) possibleDirs.push([0,-1]);
                 
-                // Pick a new random turn
                 let nextDir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
                 car.dirX = nextDir[0];
                 car.dirZ = nextDir[1];
                 
-                // Set the destination 1 block away
                 car.targetX = car.x + (car.dirX * laneSpacing);
                 car.targetZ = car.z + (car.dirZ * laneSpacing);
                 
-                // Boundary check: teleport if driven out of the city limits
                 if (car.targetX*car.targetX + car.targetZ*car.targetZ > trafficRadius*trafficRadius) {
                     car.x = Math.round((Math.random() - 0.5) * (trafficRadius) / laneSpacing) * laneSpacing;
                     car.z = Math.round((Math.random() - 0.5) * (trafficRadius) / laneSpacing) * laneSpacing;
@@ -1041,29 +1203,22 @@ function animate() {
                     car.targetZ = car.z + (car.dirZ * laneSpacing);
                 }
             }
-        } else { // 1 = MOVING
+        } else { 
             let dx = car.targetX - car.x;
             let dz = car.targetZ - car.z;
             
-            // Simple geometric distance to target
             let dist = Math.sqrt(dx*dx + dz*dz);
             
             if (dist <= 0.001) {
-                // Arrived at intersection safely
                 car.x = car.targetX;
                 car.z = car.targetZ;
-                car.state = 0; // STOPPED
+                car.state = 0; 
                 car.timer = 0.5 + Math.random() * 2.0; 
             } else {
-                // Sine wave ease-in / ease-out based on distance across the block
                 let progress = 1.0 - (dist / laneSpacing);
-                
-                // Lowered the minimum speed from 0.15 to 0.02 to allow a graceful, buttery stop
                 let easeSpeed = Math.max(0.02, Math.sin(progress * Math.PI)); 
-                
                 let stepDist = car.speed * easeSpeed * visualDt;
                 
-                // If this step reaches or overshoots the target, snap exactly to it and stop natively
                 if (stepDist >= dist) {
                     car.x = car.targetX;
                     car.z = car.targetZ;
@@ -1076,7 +1231,6 @@ function animate() {
             }
         }
         
-        // Write back to the GPU array
         tPositions[i*3 + 0] = car.x;
         tPositions[i*3 + 2] = car.z;
     }
@@ -1108,7 +1262,6 @@ function animate() {
     orb.position.y = floatY;
     firePoints.position.y = floatY;
     
-    // ANCHOR UPDATE: Only the parent ring needs to bob; child follows automatically.
     ledRing.position.y = 3.0 + (floatY * 0.5);
     
     composer.render();

@@ -70,6 +70,11 @@ body {
     filter: drop-shadow(0 0 30px currentColor);
 }
 
+/* FIX: Rotate the newly added Theme Icon 90 degrees */
+#theme-btn svg {
+    transform: rotate(90deg);
+}
+
 /* --- TOOLTIP STYLING (FROSTED GLASS) --- */
 .social-link::after {
     content: attr(data-tooltip); 
@@ -113,11 +118,7 @@ body {
     transform: translate(-50%, 0) scale(0.1);
     width: 85%;
     
-    /* UPDATED: Increased from 350px to 450px. 
-       This scales up the logos and gives the text more horizontal room, 
-       reducing the overall vertical height of the pill. */
     max-width: 400px; 
-    
     box-sizing: border-box; 
     padding: 36px; 
     
@@ -140,7 +141,9 @@ body {
     transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
                 bottom 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
                 opacity 0.4s ease, 
-                visibility 0.4s ease;
+                visibility 0.4s ease,
+                background 0.5s ease,
+                border-color 0.5s ease;
 }
 
 #info-modal.step1 {
@@ -208,4 +211,103 @@ body {
     font-size: 14px;
     margin: 0;
     text-align: justify; 
+}
+
+
+/* ==========================================================================
+   THEME OVERRIDES FOR HTML UI LAYER
+   ========================================================================== */
+
+/* --- THEME 1: TACTICAL RED NIGHT MODE --- */
+body.theme-1 .social-link {
+    animation: none;
+    stroke: #d91a1a;
+    color: #d91a1a;
+}
+body.theme-1 .social-link svg {
+    stroke: rgba(217, 26, 26, 0.5);
+}
+body.theme-1 .social-link:hover svg {
+    stroke: #d91a1a;
+    filter: drop-shadow(0 0 15px #d91a1a);
+}
+body.theme-1 .social-link::after {
+    background: rgba(15, 0, 0, 0.85);
+    border-color: rgba(217, 26, 26, 0.3);
+    color: #d91a1a;
+}
+body.theme-1 #info-modal {
+    background: rgba(15, 0, 0, 0.85);
+    border-color: rgba(217, 26, 26, 0.3);
+    color: #d91a1a;
+}
+body.theme-1 .modal-logo {
+    background: #d91a1a; /* Solid red instead of neon gradient */
+    animation: none;
+}
+body.theme-1 #glitch-text span {
+    color: #d91a1a !important;
+}
+
+/* --- THEME 2: HALLUCINATION MODE --- */
+body.theme-2 .social-link {
+    animation: none;
+    stroke: #00ffff;
+    color: #00ffff;
+}
+body.theme-2 .social-link svg {
+    stroke: rgba(0, 255, 255, 0.5);
+}
+body.theme-2 .social-link:hover svg {
+    stroke: #ff00ff;
+    filter: drop-shadow(0 0 15px #ff00ff);
+}
+body.theme-2 .social-link::after {
+    background: rgba(20, 0, 20, 0.85);
+    border-color: rgba(255, 0, 255, 0.3);
+    color: #00ffff;
+}
+body.theme-2 #info-modal {
+    background: rgba(20, 0, 20, 0.85);
+    border-color: rgba(255, 0, 255, 0.3);
+    color: #00ffff;
+}
+body.theme-2 .modal-logo {
+    background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff);
+    background-size: 200% 200%;
+    animation: gradient-undulate 1.5s ease-in-out infinite;
+}
+body.theme-2 #glitch-text span {
+    color: #ff00ff !important;
+}
+
+/* --- THEME 3: E-INK LIGHT MODE --- */
+body.theme-3 .social-link {
+    animation: none;
+    stroke: #26262b;
+    color: #26262b;
+}
+body.theme-3 .social-link svg {
+    stroke: rgba(38, 38, 43, 0.5);
+}
+body.theme-3 .social-link:hover svg {
+    stroke: #26262b;
+    filter: none;
+}
+body.theme-3 .social-link::after {
+    background: rgba(235, 230, 224, 0.85);
+    border-color: rgba(38, 38, 43, 0.2);
+    color: #26262b;
+}
+body.theme-3 #info-modal {
+    background: rgba(235, 230, 224, 0.85);
+    border-color: rgba(38, 38, 43, 0.3);
+    color: #26262b;
+}
+body.theme-3 .modal-logo {
+    background: #26262b; /* Solid dark color instead of neon gradient */
+    animation: none;
+}
+body.theme-3 #glitch-text span {
+    color: #26262b !important;
 }
