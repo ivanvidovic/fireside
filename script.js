@@ -23,7 +23,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1, 0); 
 controls.enableDamping = true;
 controls.enablePan = false; 
-controls.autoRotate = false; 
+controls.autoRotate = true; 
 controls.autoRotateSpeed = -0.5; 
 controls.update();
 
@@ -41,10 +41,11 @@ const isMobile = window.innerWidth <= 768; // Kept solely for touch velocity mat
 
 // Visually locked to the clean, crisp rendering state permanently 
 // to prevent chunky moiré loads on mobile devices.
-const bloomStrength = 0.08;
-const bloomThreshold = 0.1;
+const bloomStrength = 1.5;
+const bloomRadius = 5.0;
+const bloomThreshold = 3.0;
 
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, 1.0, bloomThreshold);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), bloomStrength, bloomRadius, bloomThreshold);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
@@ -344,7 +345,7 @@ const starMat = new THREE.ShaderMaterial({
             vAlpha = falloff * twinkle;
             
             // Base size adjusted to 1.0 for finer stars
-            float baseSize = 1.0 + mod(aSeed, 1.0);
+            float baseSize = 2.0 + mod(aSeed, 1.0);
             
             // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
             gl_PointSize = (baseSize * falloff) * (15.0 / max(0.1, -mvPosition.z));
@@ -708,8 +709,8 @@ const pMat = new THREE.ShaderMaterial({
             // SAFEGUARD: max(0.1, -mvPosition.z) prevents camera division by zero crashes
             gl_PointSize = (100.0 * aRand.x + 200.0) * burstShrink * sin(normalizedAge * 3.14) * (15.0 / max(0.1, -mvPosition.z));
 
-            vec3 magenta = vec3(4.0, 0.0, 4.0);
-            vec3 green = vec3(0.0, 4.0, 0.0); 
+            vec3 magenta = vec3(2.5, 0.0, 2.5);
+            vec3 green = vec3(0.0, 2.5, 0.0); 
             
             vColor = mix(magenta, green, step(0.6, aRand.z));
             vAlpha = smoothstep(1.5, 0.1, normalizedAge) * smoothstep(1.0, 0.05, normalizedAge);
@@ -947,7 +948,6 @@ function animate() {
     requestAnimationFrame(animate);
     
     // --- CONTINUOUS RESIZE POLLING FIX ---
-    // Checks true window dimensions every single frame instead of relying on flaky events.
     if (window.innerWidth !== lastWidth || window.innerHeight !== lastHeight) {
         lastWidth = window.innerWidth;
         lastHeight = window.innerHeight;
@@ -1043,27 +1043,31 @@ function animate() {
             // Simple geometric distance to target
             let dist = Math.sqrt(dx*dx + dz*dz);
             
-            if (dist < 0.05) {
-                // Arrived at intersection
+            if (dist <= 0.001) {
+                // Arrived at intersection safely
                 car.x = car.targetX;
                 car.z = car.targetZ;
                 car.state = 0; // STOPPED
-                // Wait for random heartbeat (red light)
                 car.timer = 0.5 + Math.random() * 2.0; 
             } else {
                 // Sine wave ease-in / ease-out based on distance across the block
                 let progress = 1.0 - (dist / laneSpacing);
                 
-                // Math.max guarantees the car never completely stalls mid-block
-                let easeSpeed = Math.max(0.15, Math.sin(progress * Math.PI)); 
+                // Lowered the minimum speed from 0.15 to 0.02 to allow a graceful, buttery stop
+                let easeSpeed = Math.max(0.02, Math.sin(progress * Math.PI)); 
                 
                 let stepDist = car.speed * easeSpeed * visualDt;
                 
-                // Prevent overshooting the intersection
-                if (stepDist > dist) stepDist = dist;
-                
-                car.x += (dx / dist) * stepDist;
-                car.z += (dz / dist) * stepDist;
+                // If this step reaches or overshoots the target, snap exactly to it and stop natively
+                if (stepDist >= dist) {
+                    car.x = car.targetX;
+                    car.z = car.targetZ;
+                    car.state = 0;
+                    car.timer = 0.5 + Math.random() * 2.0;
+                } else {
+                    car.x += (dx / dist) * stepDist;
+                    car.z += (dz / dist) * stepDist;
+                }
             }
         }
         
