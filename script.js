@@ -1194,21 +1194,33 @@ function handleInteractionEnd() {
     lastMouse3D.set(999, 999, 999);
 }
 
+// --- MOBILE IAB FIX: PROTECT NATIVE APP UI (INSTAGRAM/TIKTOK) ---
+// Intercept all touches in the top 85px during the "capture" phase and 
+// stop them from reaching Three.js/OrbitControls, ensuring the Close button works.
+const protectTopZone = (e) => {
+    let y = 0;
+    
+    // Extract the Y coordinate for both touch and mouse/pointer events
+    if (e.type.startsWith('touch')) {
+        y = e.touches.length > 0 ? e.touches[0].clientY : e.changedTouches[0].clientY;
+    } else {
+        y = e.clientY;
+    }
+    
+    // 85px covers the Instagram/TikTok header + modern iPhone Dynamic Island
+    if (y < 85) {
+        e.stopPropagation();
+    }
+};
 
-// --- INTERACTION EVENT BINDING ---
-const interactiveCanvas = renderer.domElement;
+// Bind to all relevant pointer and touch events in the capture phase
+['touchstart', 'touchmove', 'touchend', 'pointerdown', 'pointermove', 'pointerup'].forEach(eventType => {
+    window.addEventListener(eventType, protectTopZone, { capture: true, passive: true });
+});
 
-// 1. Bind 'down' and 'move' strictly to the canvas, not the window
-// The { passive: true } flag tells the browser we won't cancel native scrolling/UI events
-interactiveCanvas.addEventListener('pointerdown', handleInteractionStart, { passive: true });
-interactiveCanvas.addEventListener('pointermove', handlePointerMove, { passive: true });
-
-// 2. Keep 'up' on the window so the interaction ends cleanly even if the user drags off the screen
-window.addEventListener('pointerup', handleInteractionEnd, { passive: true });
-
-// 3. Add a 'cancel' listener to handle system interruptions (like a phone call or the IG browser minimizing)
-window.addEventListener('pointercancel', handleInteractionEnd, { passive: true });
-
+window.addEventListener('pointermove', handlePointerMove);
+window.addEventListener('pointerdown', handleInteractionStart);
+window.addEventListener('pointerup', handleInteractionEnd);
 
 let lastWidth = 0;
 let lastHeight = 0;
