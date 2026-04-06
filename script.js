@@ -28,7 +28,7 @@ controls.enablePan = false;
 controls.autoRotate = true; 
 controls.autoRotateSpeed = -0.5;
 controls.maxDistance = 50.0; 
-controls.minDistance = 3.0;
+controls.minDistance = 4.70;
 controls.update();
 
 // Reverted to a standard lightweight render target (Depth Texture removed for performance)
