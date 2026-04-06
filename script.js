@@ -1194,9 +1194,21 @@ function handleInteractionEnd() {
     lastMouse3D.set(999, 999, 999);
 }
 
-window.addEventListener('pointermove', handlePointerMove);
-window.addEventListener('pointerdown', handleInteractionStart);
-window.addEventListener('pointerup', handleInteractionEnd);
+
+// --- INTERACTION EVENT BINDING ---
+const interactiveCanvas = renderer.domElement;
+
+// 1. Bind 'down' and 'move' strictly to the canvas, not the window
+// The { passive: true } flag tells the browser we won't cancel native scrolling/UI events
+interactiveCanvas.addEventListener('pointerdown', handleInteractionStart, { passive: true });
+interactiveCanvas.addEventListener('pointermove', handlePointerMove, { passive: true });
+
+// 2. Keep 'up' on the window so the interaction ends cleanly even if the user drags off the screen
+window.addEventListener('pointerup', handleInteractionEnd, { passive: true });
+
+// 3. Add a 'cancel' listener to handle system interruptions (like a phone call or the IG browser minimizing)
+window.addEventListener('pointercancel', handleInteractionEnd, { passive: true });
+
 
 let lastWidth = 0;
 let lastHeight = 0;

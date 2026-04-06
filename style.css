@@ -22,6 +22,22 @@ body {
     touch-action: none;
 }
 
+#native-safe-zone {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    /* Uses device safe-area if available, otherwise defaults to 55px */
+    height: max(55px, env(safe-area-inset-top)); 
+    z-index: 9999;
+    
+    /* CRITICAL: Catches touches before the canvas does */
+    pointer-events: auto; 
+    
+    /* CRITICAL: Tells the device to handle these touches natively */
+    touch-action: auto; 
+}
+
 #ui-layer {
     position: absolute; 
     bottom: 30px; 
