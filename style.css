@@ -17,7 +17,9 @@ body {
     top: 0; 
     left: 0; 
     z-index: 1; 
-    /* Removed touch-action: none to prevent locking up the native browser shell */
+    
+    /* MOBILE FIX: Forces the browser to hand all touch events directly to your JS */
+    touch-action: none;
 }
 
 #ui-layer {

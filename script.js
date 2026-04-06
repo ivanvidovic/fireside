@@ -1194,30 +1194,6 @@ function handleInteractionEnd() {
     lastMouse3D.set(999, 999, 999);
 }
 
-// --- MOBILE IAB FIX: PROTECT NATIVE APP UI (INSTAGRAM/TIKTOK) ---
-// Intercept all touches in the top 85px during the "capture" phase and 
-// stop them from reaching Three.js/OrbitControls, ensuring the Close button works.
-const protectTopZone = (e) => {
-    let y = 0;
-    
-    // Extract the Y coordinate for both touch and mouse/pointer events
-    if (e.type.startsWith('touch')) {
-        y = e.touches.length > 0 ? e.touches[0].clientY : e.changedTouches[0].clientY;
-    } else {
-        y = e.clientY;
-    }
-    
-    // 85px covers the Instagram/TikTok header + modern iPhone Dynamic Island
-    if (y < 85) {
-        e.stopPropagation();
-    }
-};
-
-// Bind to all relevant pointer and touch events in the capture phase
-['touchstart', 'touchmove', 'touchend', 'pointerdown', 'pointermove', 'pointerup'].forEach(eventType => {
-    window.addEventListener(eventType, protectTopZone, { capture: true, passive: true });
-});
-
 window.addEventListener('pointermove', handlePointerMove);
 window.addEventListener('pointerdown', handleInteractionStart);
 window.addEventListener('pointerup', handleInteractionEnd);
