@@ -22,7 +22,7 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 camera.position.set(0, 0, 8);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1, 0); 
+controls.target.set(0, 1.25, 0); 
 controls.enableDamping = true;
 controls.enablePan = false; 
 controls.autoRotate = true; 
