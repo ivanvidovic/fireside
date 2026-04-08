@@ -493,7 +493,7 @@ function updateMarqueeBottom(text) {
     }
 }
 
-updateMarqueeBottom("Thursday, April 23rd inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209");
+updateMarqueeBottom("Thursday, April 23rd from 6-9PM @ Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209");
 
 ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
