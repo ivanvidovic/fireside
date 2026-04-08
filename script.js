@@ -6,8 +6,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const HALFTONE_CONFIG = { size: 0.6, rotation: Math.PI / 8, shape: 0 };
+
+// --- LAYER SETUP FOR OPTIMIZED REFLECTIONS ---
+const REFLECTION_LAYER = 1;
 
 const container = document.getElementById('canvas-container');
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -18,7 +22,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 0, 8);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -27,11 +31,11 @@ controls.enableDamping = true;
 controls.enablePan = false; 
 controls.autoRotate = true; 
 controls.autoRotateSpeed = -0.5;
-controls.maxDistance = 50.0; 
-controls.minDistance = 4.70;
+controls.maxDistance = 50.0;
+controls.minDistance = 2.0;
 controls.update();
 
-// Reverted to a standard lightweight render target (Depth Texture removed for performance)
+// Standard lightweight render target
 const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
@@ -44,7 +48,7 @@ const renderScene = new RenderPass(scene, camera);
 // --- UNIFIED VISUAL STATE & BLOOM LOGIC ---
 const isMobile = window.innerWidth <= 768; 
 
-const bloomStrength = 0.25;
+const bloomStrength = 0.4;
 const bloomRadius = 2.0;
 const bloomThreshold = 2.0;
 
@@ -90,7 +94,7 @@ class HallucinationPass extends Pass {
                 varying vec2 vUv;
 
                 float getTrailStrength(int t) {
-                    if (t == 3) return 0.94; // Hallucination Mode
+                    if (t == 3) return 0.97; // FIX: Lowered significantly from 0.94 for readable heat-vision marquees
                     if (t == 1) return 0.82; // Faint Black Light Trace
                     if (t == 5) return 0.80; // ASCII Phosphor Ghosting
                     return 0.0;
@@ -197,12 +201,50 @@ const themeShader = {
                 float mixVal = smoothstep(0.05, 0.5, lum);
                 return mix(bgEink, fgEink, mixVal) - scanline; 
                 
+            } else if (t == 3) {
+                // THEME 3: INFRARED / HEAT VISION (Custom 6-Color Mapping)
+                float h = clamp(lum * 1.5, 0.0, 1.0); // Boosted for better range
+                
+                vec3 c1 = vec3(0.031, 0.035, 0.137); // #080923 (Coldest / Bottom)
+                vec3 c2 = vec3(0.012, 0.196, 0.506); // #033281
+                vec3 c3 = vec3(0.145, 0.573, 0.157); // #259228
+                vec3 c4 = vec3(0.894, 0.871, 0.200); // #e4de33
+                vec3 c5 = vec3(0.706, 0.094, 0.078); // #b41814
+                vec3 c6 = vec3(0.757, 0.753, 0.682); // #c1c0ae (Hottest / Top)
+                
+                vec3 heat;
+                if (h < 0.2) heat = mix(c1, c2, h / 0.2);
+                else if (h < 0.4) heat = mix(c2, c3, (h - 0.2) / 0.2);
+                else if (h < 0.6) heat = mix(c3, c4, (h - 0.4) / 0.2);
+                else if (h < 0.8) heat = mix(c4, c5, (h - 0.6) / 0.2);
+                else heat = mix(c5, c6, (h - 0.8) / 0.2);
+                
+                return heat - scanline * 0.5;
+
             } else if (t == 4) {
-                // THEME 4: TACTICAL RED NIGHT MODE
+                // THEME 4: TACTICAL RED NIGHT MODE WITH NASA RESEAU GRID
                 vec3 bgNight = vec3(0.0, 0.0, 0.0); 
                 vec3 fgNight = vec3(0.85, 0.1, 0.1); 
                 float mixVal = smoothstep(0.0, 0.6, lum);
-                return mix(bgNight, fgNight, mixVal) - scanline; 
+                vec3 baseNight = mix(bgNight, fgNight, mixVal);
+                
+                // Calculate correct aspect ratio for square crosses
+                vec2 aspectUv = uv * vec2(uResolution.x / uResolution.y, 1.0);
+                
+                // Scale the grid up/down (number of crosses)
+                vec2 gridUv = fract(aspectUv * 6.0) - 0.5; 
+                
+                float crossThickness = 0.006;
+                float crossLength = 0.12;
+                
+                // Draw horizontal and vertical bars for the '+'
+                float vertBar = step(abs(gridUv.x), crossThickness) * step(abs(gridUv.y), crossLength);
+                float horzBar = step(abs(gridUv.y), crossThickness) * step(abs(gridUv.x), crossLength);
+                float crossMask = clamp(vertBar + horzBar, 0.0, 1.0);
+                
+                // Blend crosses over the scene in a deep tactical red
+                vec3 crossColor = vec3(0.15, 0.0, 0.0); 
+                return mix(baseNight, crossColor, crossMask * 0.8) - scanline; 
                 
             } else if (t == 1) {
                 // THEME 1: BLACK LIGHT MODE
@@ -230,7 +272,7 @@ const themeShader = {
                 return asciiColor - scanline * 3.0;
             }
             
-            // Themes 0 (Default) and 3 (Hallucination) simply pass raw color
+            // Theme 0 (Default) simply passes raw color
             return rawColor;
         }
 
@@ -253,37 +295,29 @@ const themePass = new ShaderPass(themeShader);
 composer.addPass(themePass);
 
 
-const envScene = new THREE.Scene();
-const envGeo = new THREE.SphereGeometry(50, 64, 64);
-const envMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    vertexShader: `
-        varying vec3 vWorldPosition;
-        void main() {
-            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-            vWorldPosition = worldPosition.xyz;
-            gl_Position = projectionMatrix * viewMatrix * worldPosition;
-        }
-    `,
-    fragmentShader: `
-        varying vec3 vWorldPosition;
-        void main() {
-            vec3 dir = normalize(vWorldPosition);
-            vec3 skyColor = mix(vec3(0.0), vec3(0.02, 0.0, 0.04), dir.y);
-            vec3 groundColor = vec3(0.0);
-            float horizon = smoothstep(-0.01, 0.01, dir.y);
-            gl_FragColor = vec4(mix(groundColor, skyColor, horizon), 1.0);
-        }
-    `
+// --- REAL-TIME CHROME REFLECTION SETUP ---
+const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(256, {
+    generateMipmaps: true,
+    minFilter: THREE.LinearMipmapLinearFilter,
+    colorSpace: THREE.SRGBColorSpace 
 });
-envScene.add(new THREE.Mesh(envGeo, envMat));
-const envMap = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
+const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
+// Force the reflection camera to ONLY look at the solid 3D meshes, ignoring particles
+cubeCamera.layers.set(REFLECTION_LAYER); 
+scene.add(cubeCamera);
 
-// 1. The Visual Orb
+
+// 1. The Visual Orb (Modified for Real-Time Chrome Reflections)
 const orb = new THREE.Mesh(
     new THREE.SphereGeometry(1.2, 250, 250),
     new THREE.MeshPhysicalMaterial({
-        color: 0xffffff, metalness: 1.0, roughness: 0.02, envMap: envMap, envMapIntensity: 0.4 
+        color: 0xffffff, 
+        metalness: 1.0, 
+        roughness: 0.0, // Pure mirror finish
+        envMap: cubeRenderTarget.texture, 
+        envMapIntensity: 1.0, 
+        transparent: true,
+        opacity: 1.0
     })
 );
 scene.add(orb);
@@ -400,6 +434,7 @@ const ledMat = new THREE.ShaderMaterial({
 
 const ledGeo = new THREE.CylinderGeometry(2.4, 2.4, 0.5, 64, 16, true);
 const ledRing = new THREE.Mesh(ledGeo, ledMat);
+ledRing.layers.enable(REFLECTION_LAYER); // Add to reflection layer
 ledRing.position.y = 3.0; 
 scene.add(ledRing);
 
@@ -409,11 +444,13 @@ const textCanvasBottom = document.createElement('canvas');
 textCanvasBottom.height = 64;  
 const tCtxBottom = textCanvasBottom.getContext('2d', { willReadFrequently: true });
 
-const ledTextureBottom = new THREE.CanvasTexture(textCanvasBottom);
+let ledTextureBottom = new THREE.CanvasTexture(textCanvasBottom);
 ledTextureBottom.minFilter = THREE.NearestFilter;
 ledTextureBottom.magFilter = THREE.NearestFilter;
 ledTextureBottom.wrapS = THREE.RepeatWrapping; 
 ledTextureBottom.wrapT = THREE.ClampToEdgeWrapping;
+
+let ledMatBottom;
 
 function updateMarqueeBottom(text) {
     tCtxBottom.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
@@ -423,6 +460,11 @@ function updateMarqueeBottom(text) {
     const IDEAL_WIDTH = 1930; 
     let count = Math.round(IDEAL_WIDTH / segmentWidth);
     if (count < 1) count = 1; 
+
+    // Force exactly 3 repeats for the status message override so it fills cleanly
+    if (text === "[ VISION MODE LOCKED ]" || text === "[ VISION MODE UNLOCKED ]") {
+        count = 3;
+    }
     
     textCanvasBottom.width = segmentWidth * count;
     
@@ -438,12 +480,22 @@ function updateMarqueeBottom(text) {
         tCtxBottom.fillText(segment, i * segmentWidth, textCanvasBottom.height / 2 + 4); 
     }
     
-    ledTextureBottom.needsUpdate = true;
+    if (ledMatBottom) {
+        ledTextureBottom.dispose();
+        ledTextureBottom = new THREE.CanvasTexture(textCanvasBottom);
+        ledTextureBottom.minFilter = THREE.NearestFilter;
+        ledTextureBottom.magFilter = THREE.NearestFilter;
+        ledTextureBottom.wrapS = THREE.RepeatWrapping; 
+        ledTextureBottom.wrapT = THREE.ClampToEdgeWrapping;
+        ledMatBottom.uniforms.tText.value = ledTextureBottom;
+    } else {
+        ledTextureBottom.needsUpdate = true;
+    }
 }
 
 updateMarqueeBottom("Thursday, April 23rd inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209");
 
-const ledMatBottom = new THREE.ShaderMaterial({
+ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
         tText: { value: ledTextureBottom },
         uTime: { value: 0 },
@@ -508,9 +560,285 @@ const ledMatBottom = new THREE.ShaderMaterial({
 
 const ledGeoBottom = new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true);
 const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
-
+ledRingBottom.layers.enable(REFLECTION_LAYER); // Add to reflection layer
 ledRingBottom.position.y = -0.45; 
 ledRing.add(ledRingBottom);
+
+// ---------------------------------------------------------
+// 3. GUEST SPEAKER HOLOGRAPHIC LED MARQUEE (THIRD RING)
+// ---------------------------------------------------------
+const textCanvasGuest = document.createElement('canvas');
+textCanvasGuest.height = 64;  
+const tCtxGuest = textCanvasGuest.getContext('2d', { willReadFrequently: true });
+
+const ledTextureGuest = new THREE.CanvasTexture(textCanvasGuest);
+ledTextureGuest.minFilter = THREE.NearestFilter;
+ledTextureGuest.magFilter = THREE.NearestFilter;
+ledTextureGuest.wrapS = THREE.RepeatWrapping; 
+ledTextureGuest.wrapT = THREE.ClampToEdgeWrapping;
+
+function updateMarqueeGuest(text) {
+    tCtxGuest.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+    const segment = `${text} *** `;
+    const segmentWidth = tCtxGuest.measureText(segment).width;
+    
+    const IDEAL_WIDTH = 1930; 
+    let count = Math.round(IDEAL_WIDTH / segmentWidth);
+    if (count < 1) count = 1; 
+    
+    textCanvasGuest.width = segmentWidth * count;
+    
+    tCtxGuest.fillStyle = '#000000'; 
+    tCtxGuest.fillRect(0, 0, textCanvasGuest.width, textCanvasGuest.height);
+    
+    tCtxGuest.fillStyle = '#ffffff'; 
+    tCtxGuest.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+    tCtxGuest.textAlign = 'left';
+    tCtxGuest.textBaseline = 'middle';
+    
+    for(let i = 0; i < count; i++) {
+        tCtxGuest.fillText(segment, i * segmentWidth, textCanvasGuest.height / 2 + 4); 
+    }
+    
+    ledTextureGuest.needsUpdate = true;
+}
+
+updateMarqueeGuest("Guest Speaker: BLVCKL!GHT (@blvcklightai) Theme: AI");
+
+const ledMatGuest = new THREE.ShaderMaterial({
+    uniforms: {
+        tText: { value: ledTextureGuest },
+        uTime: { value: 0 },
+        uTheme: { value: 0 },
+        uNextTheme: { value: 0 },
+        uTransition: { value: 0.0 }
+    },
+    transparent: true,
+    side: THREE.DoubleSide, 
+    blending: THREE.AdditiveBlending, 
+    depthWrite: false, 
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tText;
+        uniform float uTime;
+        uniform int uTheme; 
+        uniform int uNextTheme; 
+        uniform float uTransition; 
+        varying vec2 vUv;
+
+        vec3 getLEDColor(int t) {
+            if (t == 3) return vec3(0.0, 0.0, 2.5); 
+            if (t == 1) return vec3(4.0, 0.4, 0.0); 
+            if (t == 5) return vec3(0.0, 2.5, 0.3); 
+            return vec3(0.0, 2.5, 0.0);             
+        }
+
+        void main() {
+            float rows = 22.0;   
+            float cols = 420.0;  
+
+            vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
+            vec2 sampleUv = gridUv;
+            
+            sampleUv.x += uTime * 0.06; 
+            
+            vec4 textData = texture2D(tText, sampleUv);
+            vec2 cellUv = fract(vUv * vec2(cols, rows)) - 0.5;
+            float dist = length(cellUv);
+            float ledRadius = 0.25; 
+            float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
+            
+            float isOn = 1.0 - step(0.5, textData.r);
+            float finalAlpha = ledMask * isOn;
+            
+            if (finalAlpha < 0.01) discard; 
+            
+            vec3 c1 = getLEDColor(uTheme);
+            vec3 c2 = getLEDColor(uNextTheme);
+            vec3 finalLedColor = mix(c1, c2, uTransition);
+            
+            gl_FragColor = vec4(finalLedColor, finalAlpha);
+        }
+    `
+});
+
+const ledGeoGuest = new THREE.CylinderGeometry(1.7, 1.5, 0.4, 64, 16, true);
+const ledRingGuest = new THREE.Mesh(ledGeoGuest, ledMatGuest);
+ledRingGuest.layers.enable(REFLECTION_LAYER); // Add to reflection layer
+ledRingGuest.position.y = -4.0; 
+ledRing.add(ledRingGuest);
+
+
+// ---------------------------------------------------------
+// EASTER EGG 1: GLORP DOG (HOLOGRAPHIC MASCOT)
+// ---------------------------------------------------------
+let glorpDog;
+const gltfLoader = new GLTFLoader();
+gltfLoader.load('glorp-dog.glb', (gltf) => {
+    glorpDog = gltf.scene;
+    
+    // Scale and prepare for the holographic hover above the top marquee
+    glorpDog.scale.setScalar(3.75); 
+    
+    // Traverse the model to setup its materials for Black Light reactivity
+    glorpDog.traverse((child) => {
+        child.layers.enable(REFLECTION_LAYER); // Add to reflection layer
+        if (child.isMesh) {
+            child.material.transparent = true;
+            child.material.opacity = 0.0;
+            child.material.depthWrite = true; // Smooths out holographic compositing
+            
+            // Emulate UV reactive paint by making the texture itself emissive
+            if (child.material.map) {
+                child.material.emissiveMap = child.material.map;
+                // Tint the emission towards a hot neon magenta 
+                child.material.emissive = new THREE.Color(0xffff00); 
+                child.material.emissiveIntensity = 0.0;
+            }
+        }
+    });
+    
+    ledRing.add(glorpDog); 
+});
+
+// ---------------------------------------------------------
+// EASTER EGG 2: GIANT SALAMANDER ARRAY
+// ---------------------------------------------------------
+const salamanderGroup = new THREE.Group();
+scene.add(salamanderGroup);
+let salamanderMeshes = [];
+
+gltfLoader.load('recursive-salamander.glb', (gltf) => {
+    const baseModel = gltf.scene;
+    
+    // USER CONTROLS: Completely decoupled Scale, Position, and Rotation
+    const SALAMANDER_SCALE = 15.0; 
+    const SALAMANDER_RADIUS = 20.0; 
+    // Set custom rotation here (in radians, e.g., Math.PI / 2)
+    const SALAMANDER_ROT_X = 0.0; 
+    const SALAMANDER_ROT_Y = -45.0;
+    const SALAMANDER_ROT_Z = 0.0;
+    
+    // Calculate the raw bounding box first
+    const box = new THREE.Box3().setFromObject(baseModel);
+    const center = box.getCenter(new THREE.Vector3());
+    const bottomY = box.min.y;
+    
+    // Shift the raw geometry so its absolute bottom-center rests precisely at its own local [0,0,0]
+    baseModel.position.set(-center.x, -bottomY, -center.z);
+    
+    // Wrap the shifted geometry inside a new group. 
+    // This wrapper acts as the clean pivot point so scaling it doesn't move it across the scene.
+    const wrapper = new THREE.Group();
+    wrapper.add(baseModel);
+    
+    // Apply the scale to the wrapper cleanly in-place
+    wrapper.scale.setScalar(SALAMANDER_SCALE);
+    
+    wrapper.traverse((child) => {
+        child.layers.enable(REFLECTION_LAYER); // Add to reflection layer
+        if (child.isMesh) {
+            child.material.transparent = true;
+            child.material.opacity = 0.0;
+            child.material.depthWrite = true; 
+            
+            if (child.material.map) {
+                child.material.emissiveMap = child.material.map;
+            }
+            child.material.emissive = new THREE.Color(0xffff00); 
+            child.material.emissiveIntensity = 0.0;
+        }
+    });
+
+    for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const clone = wrapper.clone();
+        
+        clone.position.x = Math.cos(angle) * SALAMANDER_RADIUS;
+        clone.position.z = Math.sin(angle) * SALAMANDER_RADIUS;
+        
+        // Locked exactly to the traffic floor (-3.5)
+        clone.position.y = -3.5; 
+        
+        clone.lookAt(0, -3.5, 0); 
+        
+        // Add optional user-defined rotations on top of the 'lookAt' orientation
+        clone.rotateX(SALAMANDER_ROT_X);
+        clone.rotateY(SALAMANDER_ROT_Y);
+        clone.rotateZ(SALAMANDER_ROT_Z);
+        
+        salamanderGroup.add(clone);
+        salamanderMeshes.push(clone);
+    }
+});
+
+// ---------------------------------------------------------
+// EASTER EGG 3: BORBON ARRAY
+// ---------------------------------------------------------
+const borbonGroup = new THREE.Group();
+scene.add(borbonGroup);
+let borbonMeshes = [];
+
+gltfLoader.load('borbon.glb', (gltf) => {
+    const baseModel = gltf.scene;
+    
+    // USER CONTROLS: Completely decoupled Scale, Position, and Rotation
+    const BORBON_SCALE = 60.0; 
+    const BORBON_RADIUS = 100.0; 
+    const BORBON_ROT_X = 0.0; 
+    const BORBON_ROT_Y = 0.0;
+    const BORBON_ROT_Z = 0.0;
+    
+    const box = new THREE.Box3().setFromObject(baseModel);
+    const center = box.getCenter(new THREE.Vector3());
+    const bottomY = box.min.y;
+    
+    baseModel.position.set(-center.x, -bottomY, -center.z);
+    
+    const wrapper = new THREE.Group();
+    wrapper.add(baseModel);
+    
+    wrapper.scale.setScalar(BORBON_SCALE);
+    
+    wrapper.traverse((child) => {
+        child.layers.enable(REFLECTION_LAYER); // Add to reflection layer
+        if (child.isMesh) {
+            child.material.transparent = true;
+            child.material.opacity = 0.0;
+            child.material.depthWrite = true; 
+            
+            if (child.material.map) {
+                child.material.emissiveMap = child.material.map;
+            }
+            child.material.emissive = new THREE.Color(0xffff00); 
+            child.material.emissiveIntensity = 0.0;
+        }
+    });
+
+    for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const clone = wrapper.clone();
+        
+        clone.position.x = Math.cos(angle) * BORBON_RADIUS;
+        clone.position.z = Math.sin(angle) * BORBON_RADIUS;
+        
+        clone.position.y = -3.5; 
+        clone.lookAt(0, -3.5, 0); 
+        
+        clone.rotateX(BORBON_ROT_X);
+        clone.rotateY(BORBON_ROT_Y);
+        clone.rotateZ(BORBON_ROT_Z);
+        
+        borbonGroup.add(clone);
+        borbonMeshes.push(clone);
+    }
+});
 
 
 // --- STATE MANAGERS & AUTO-TRANSITION LOGIC ---
@@ -520,6 +848,9 @@ let isTransitioning = false;
 let transitionProgress = 0.0;
 let idleTimer = 0.0;
 let uiUpdated = false;
+
+// Master lock variable for the idle transition
+let isAutoCycleLocked = false;
 
 const themeBtn = document.getElementById('theme-btn');
 if (themeBtn) {
@@ -548,6 +879,9 @@ if (themeBtn) {
         
         ledMatBottom.uniforms.uTheme.value = currentTheme;
         ledMatBottom.uniforms.uTransition.value = 0.0;
+
+        ledMatGuest.uniforms.uTheme.value = currentTheme;
+        ledMatGuest.uniforms.uTransition.value = 0.0;
 
         document.body.className = 'theme-' + currentTheme;
     });
@@ -1014,7 +1348,7 @@ scene.add(firePoints);
 class TextScramble {
     constructor(el) {
         this.el = el;
-        this.chars = '!<>-\\/[]{}—=+*^?#';
+        this.chars = '!<>-\\/[]{}_=+*^?#';
         this.update = this.update.bind(this);
     }
     setText(newText) {
@@ -1071,30 +1405,49 @@ const glitchEl = document.getElementById('glitch-text');
 const targetText = glitchEl.getAttribute('data-text');
 const scrambler = new TextScramble(glitchEl);
 
-glitchEl.innerHTML = '';
+const eventBtn = document.getElementById('event-btn');
+const eventModal = document.getElementById('event-modal');
+
+// NEW: Setup an array of scramblers for all the separate event text elements
+const eventGlitchEls = document.querySelectorAll('.event-glitch');
+const eventScramblers = Array.from(eventGlitchEls).map(el => {
+    return { scrambler: new TextScramble(el), text: el.getAttribute('data-text') };
+});
 
 let step1Timeout;
 let step2Timeout;
+let eventStep1Timeout;
+let eventStep2Timeout;
+
+glitchEl.innerHTML = '';
+eventGlitchEls.forEach(el => el.innerHTML = ''); // Hide event text on load
 
 function closeModal() {
     clearTimeout(step1Timeout);
     clearTimeout(step2Timeout);
     cancelAnimationFrame(scrambler.frameRequest);
-    
     infoModal.classList.remove('step1', 'step2');
     glitchEl.innerHTML = ''; 
+    
+    clearTimeout(eventStep1Timeout);
+    clearTimeout(eventStep2Timeout);
+    eventModal.classList.remove('step1', 'step2');
+    eventScramblers.forEach(obj => {
+        cancelAnimationFrame(obj.scrambler.frameRequest);
+        obj.scrambler.el.innerHTML = ''; 
+    });
 }
 
 infoBtn.addEventListener('click', (e) => {
     e.preventDefault();
     if (infoModal.classList.contains('step1')) return; 
     
-    infoModal.classList.add('step1');
+    closeModal(); 
     
+    infoModal.classList.add('step1');
     step1Timeout = setTimeout(() => {
         if (!infoModal.classList.contains('step1')) return; 
         infoModal.classList.add('step2');
-        
         step2Timeout = setTimeout(() => {
             if (!infoModal.classList.contains('step2')) return;
             scrambler.setText(targetText);
@@ -1102,10 +1455,36 @@ infoBtn.addEventListener('click', (e) => {
     }, 350); 
 });
 
+eventBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (eventModal.classList.contains('step1')) return; 
+    
+    closeModal(); 
+    
+    eventModal.classList.add('step1');
+    eventStep1Timeout = setTimeout(() => {
+        if (!eventModal.classList.contains('step1')) return; 
+        eventModal.classList.add('step2');
+        
+        // NEW: Trigger all event scramblers simultaneously
+        eventStep2Timeout = setTimeout(() => {
+            if (!eventModal.classList.contains('step2')) return;
+            eventScramblers.forEach(obj => obj.scrambler.setText(obj.text));
+        }, 200);
+        
+    }, 350); 
+});
+
 infoModal.addEventListener('click', closeModal);
 
+eventModal.addEventListener('click', (e) => {
+    if(e.target.tagName !== 'A') {
+        closeModal();
+    }
+});
+
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && infoModal.classList.contains('step1')) {
+    if (e.key === 'Escape') {
         closeModal();
     }
 });
@@ -1136,11 +1515,14 @@ let lastMouse3D = new THREE.Vector3(999, 999, 999);
 let targetMouseVel = new THREE.Vector3();
 let currentMouseVel = new THREE.Vector3();
 
+// Timeout references for the Marquee feedback text
+let marqueeBotTimer = null;
+
 function handlePointerMove(e) {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
-    if (!isTransitioning) idleTimer = 0.0;
+    if (!isTransitioning && !isAutoCycleLocked) idleTimer = 0.0;
     
     const cameraDir = new THREE.Vector3();
     camera.getWorldDirection(cameraDir);
@@ -1164,14 +1546,31 @@ function handlePointerMove(e) {
 }
 
 function handleInteractionStart(e) {
-    if (e.target.closest('#ui-layer') || e.target.closest('#info-modal')) return;
+    // 1. Tell the raycaster to ignore clicks if they happen inside the UI or EITHER modal
+    if (e.target.closest('#ui-layer') || e.target.closest('#info-modal') || e.target.closest('#event-modal')) return;
 
-    if (infoModal.classList.contains('step1')) {
+    // 2. If EITHER modal is currently open, clicking the background closes it and stops the interaction
+    if (infoModal.classList.contains('step1') || eventModal.classList.contains('step1')) {
         closeModal();
         return; 
     }
 
     raycaster.setFromCamera(mouse, camera);
+    
+    // --- MARQUEE HIJACK CHECK ---
+    const marqueeIntersects = raycaster.intersectObjects([ledRingBottom]); // Only check the second marquee
+    if (marqueeIntersects.length > 0) {
+        isAutoCycleLocked = !isAutoCycleLocked;
+        const statusMsg = isAutoCycleLocked ? "[ VISION MODE LOCKED ]" : "[ VISION MODE UNLOCKED ]";
+        
+        if (marqueeBotTimer) clearTimeout(marqueeBotTimer);
+        updateMarqueeBottom(statusMsg);
+        marqueeBotTimer = setTimeout(() => updateMarqueeBottom("Thursday, April 23rd inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209"), 3000);
+        
+        if (!isAutoCycleLocked) idleTimer = 0.0;
+        
+        return; // Prevent triggering the orb interaction burst
+    }
     
     const intersects = raycaster.intersectObject(hitBox);
     
@@ -1201,6 +1600,8 @@ window.addEventListener('pointerup', handleInteractionEnd);
 
 let lastWidth = 0;
 let lastHeight = 0;
+
+let reflectionFrame = 0; // Throttles the CubeCamera updates
 
 // --- Animation Loop ---
 function animate() {
@@ -1233,18 +1634,21 @@ function animate() {
 
     // --- AUTOMATED IDLE TRANSITION LOGIC ---
     if (!isTransitioning) {
-        idleTimer += rawDt;
-        
-        if (idleTimer >= 30.0) {
-            isTransitioning = true;
-            nextTheme = (currentTheme + 1) % 6;
-            transitionProgress = 0.0;
-            uiUpdated = false;
+        if (!isAutoCycleLocked) {
+            idleTimer += rawDt;
             
-            themePass.uniforms.uNextTheme.value = nextTheme;
-            hallucinationPass.material.uniforms.uNextTheme.value = nextTheme;
-            ledMat.uniforms.uNextTheme.value = nextTheme;
-            ledMatBottom.uniforms.uNextTheme.value = nextTheme;
+            if (idleTimer >= 30.0) {
+                isTransitioning = true;
+                nextTheme = (currentTheme + 1) % 6;
+                transitionProgress = 0.0;
+                uiUpdated = false;
+                
+                themePass.uniforms.uNextTheme.value = nextTheme;
+                hallucinationPass.material.uniforms.uNextTheme.value = nextTheme;
+                ledMat.uniforms.uNextTheme.value = nextTheme;
+                ledMatBottom.uniforms.uNextTheme.value = nextTheme;
+                ledMatGuest.uniforms.uNextTheme.value = nextTheme;
+            }
         }
     } else {
         transitionProgress += rawDt / 10.0;
@@ -1264,6 +1668,7 @@ function animate() {
             hallucinationPass.material.uniforms.uTheme.value = currentTheme;
             ledMat.uniforms.uTheme.value = currentTheme;
             ledMatBottom.uniforms.uTheme.value = currentTheme;
+            ledMatGuest.uniforms.uTheme.value = currentTheme;
         }
     }
     
@@ -1272,6 +1677,7 @@ function animate() {
     hallucinationPass.material.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
     ledMat.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
     ledMatBottom.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
+    ledMatGuest.uniforms.uTransition.value = isTransitioning ? ease : 0.0;
 
 
     // --- DYNAMIC BLOOM CROSSFADING ---
@@ -1326,7 +1732,65 @@ function animate() {
 
     ledMat.uniforms.uTime.value = visualTime;
     ledMatBottom.uniforms.uTime.value = visualTime;
+    ledMatGuest.uniforms.uTime.value = visualTime;
     starMat.uniforms.uTime.value = visualTime; 
+
+    // --- GLORP DOG ANIMATION & STATE ---
+    let a1 = (currentTheme === 1) ? 1.0 : 0.0;
+    let a2 = (nextTheme === 1) ? 1.0 : 0.0;
+    let targetAlpha = isTransitioning ? a1 + (a2 - a1) * ease : a1;
+
+    if (glorpDog) {
+        // Spin slowly like a holographic collectible
+        glorpDog.rotation.y += visualDt * -0.5;
+        
+        // Hover bobbing directly above the top ring
+        glorpDog.position.y = 0.4 + Math.sin(visualTime * 1.0) * 0.2;
+        
+        glorpDog.visible = targetAlpha > 0.001; 
+        
+        glorpDog.traverse((child) => {
+            if (child.isMesh) {
+                child.material.opacity = targetAlpha;
+                child.material.emissiveIntensity = targetAlpha * 0.8; 
+                child.material.depthWrite = (targetAlpha > 0.99); 
+            }
+        });
+    }
+
+    // --- GIANT SALAMANDER ARRAY ANIMATION & STATE ---
+    if (salamanderGroup) {
+        salamanderGroup.visible = targetAlpha > 0.001; 
+        
+        for (let i = 0; i < salamanderMeshes.length; i++) {
+            let salamander = salamanderMeshes[i];
+            
+            salamander.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.opacity = targetAlpha;
+                    child.material.emissiveIntensity = targetAlpha * 0.8; 
+                    child.material.depthWrite = (targetAlpha > 0.99); 
+                }
+            });
+        }
+    }
+
+    // --- EASTER EGG 3: BORBON ARRAY ANIMATION & STATE ---
+    if (borbonGroup) {
+        borbonGroup.visible = targetAlpha > 0.001; 
+        
+        for (let i = 0; i < borbonMeshes.length; i++) {
+            let borbon = borbonMeshes[i];
+            
+            borbon.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.opacity = targetAlpha;
+                    child.material.emissiveIntensity = targetAlpha * 0.8; 
+                    child.material.depthWrite = (targetAlpha > 0.99); 
+                }
+            });
+        }
+    }
 
     const tPositions = trafficField.geometry.attributes.position.array;
     
@@ -1413,9 +1877,58 @@ function animate() {
     
     pMat.uniforms.uTime.value = visualTime;
     
+    // --- DYNAMIC ORB FADE LOGIC ---
+    const distToCamera = camera.position.distanceTo(orb.position);
+
+    let targetOrbOpacity = 1.0;
+    if (distToCamera < 3.0) {
+        targetOrbOpacity = 0.0;
+    }
+
+    orb.material.opacity += (targetOrbOpacity - orb.material.opacity) * (visualDt * 5.0);
+
+    if (orb.material.opacity < 0.99) {
+        orb.material.transparent = true;
+        orb.material.depthWrite = false; 
+    } else {
+        orb.material.transparent = false;
+        orb.material.depthWrite = true;
+    }
+    
+    orb.visible = orb.material.opacity > 0.01;
+
+    // --- UPDATE UI HEAT LEGENDS BY CAMERA DISTANCE (Theme 3 Only) ---
+    if (currentTheme === 3 || (isTransitioning && nextTheme === 3)) {
+        const indLeft = document.querySelector('#heat-legend-left .heat-indicator');
+        const indRight = document.querySelector('#heat-legend-right .heat-indicator');
+        if (indLeft && indRight) {
+            const minD = 2.0;
+            const maxD = 50.0;
+            
+            // Map the camera distance to a percentage (closer = higher percentage)
+            let heatPercent = 100.0 * (1.0 - (Math.max(minD, Math.min(distToCamera, maxD)) - minD) / (maxD - minD));
+            
+            // Add a tiny bit of jitter/noise to make it feel like a live analog meter
+            const noise = (Math.random() - 0.5) * 1.5;
+            heatPercent = Math.max(0, Math.min(100, heatPercent + noise));
+            
+            indLeft.style.bottom = `${heatPercent}%`;
+            indRight.style.bottom = `${heatPercent}%`;
+        }
+    }
+    
     const floatY = Math.sin(visualTime * 0.8) * 0.1;
     orb.position.y = floatY;
     firePoints.position.y = floatY;
+
+    // --- OPTIMIZED REAL-TIME REFLECTIONS ---
+    reflectionFrame++;
+    if (orb.visible && reflectionFrame % 3 === 0) {
+        orb.visible = false; 
+        cubeCamera.position.copy(orb.position);
+        cubeCamera.update(renderer, scene);
+        orb.visible = true; 
+    }
     
     ledRing.position.y = 3.0 + (floatY * 0.5);
     
