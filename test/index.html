@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fireside.technology</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div id="heat-legend-left" class="heat-legend">
+        <div class="heat-bar-wrapper">
+            <div class="heat-bar"></div>
+            <div class="heat-indicator">
+                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="4,2 20,12 4,22" /></svg>
+                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="20,2 4,12 20,22" /></svg>
+            </div>
+        </div>
+    </div>
+    
+    <div id="heat-legend-right" class="heat-legend">
+        <div class="heat-bar-wrapper">
+            <div class="heat-bar"></div>
+            <div class="heat-indicator">
+                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="4,2 20,12 4,22" /></svg>
+                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="20,2 4,12 20,22" /></svg>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer">
+        <div id="center-links">
+            <a href="#" id="info-btn" class="social-link" data-tooltip="About Fireside">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+            </a>
+            
+            <a href="#" id="event-btn" class="social-link" data-tooltip="Upcoming Event Details">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+            </a>
+            
+            <a href="#" id="theme-btn" class="social-link" data-tooltip="Toggle Vision Mode">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </a>
+            
+            <a href="https://instagram.com/fireside.spark" target="_blank" class="social-link" data-tooltip="Follow Us On Instagram">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+            </a>
+            <a href="https://patreon.com/FiresideCreativeTechnology" target="_blank" class="social-link" data-tooltip="Become A Patron">
+                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="16" cy="10" r="6"></circle>
+                    <rect x="3" y="4" width="5" height="16" rx="2.5"></rect>
+                </svg>
+            </a>
+        </div>
+    </div>
+
+    <div id="info-modal">
+        <div class="modal-logo top"></div>
+
+        <div class="modal-content">
+            <p id="glitch-text" data-text="Fireside is a Portland-based creative technology community bringing together artists, designers, technologists, and innovators to explore what’s next at the intersection of creativity and emerging tools. Through meetups, presentations, collaborations, and community programming, Fireside creates space to share ideas, showcase work, and connect people shaping the future of creative technology."></p>
+        </div>
+        
+        <div class="modal-logo bottom"></div>
+    </div>
+    
+    <div id="event-modal">
+        <div class="modal-logo top"></div>
+
+        <div class="modal-content">
+            <p style="margin: 0; text-align: center; font-size: 14px;">
+                <strong class="event-glitch" data-text="FIRESIDE [MEETUP]" style="font-size: 18px; letter-spacing: 1px;"></strong><br><br>
+                <strong class="event-glitch" data-text="Date & Time:"></strong><br>
+                <span class="event-glitch" data-text="Thursday, April 23rd from 6:00-9:00pm"></span><br><br>
+                <strong class="event-glitch" data-text="Location:"></strong><br>
+                <span class="event-glitch" data-text="Goodies Snack Shop"></span><br>
+                <span class="event-glitch" data-text="139 NW 2nd Ave, Portland, OR"></span><br><br>
+                <strong class="event-glitch" data-text="Guest Speaker:"></strong><br>
+                <span class="event-glitch" data-text="BLVCKL!GHT"></span><br>
+                <a href="https://www.youtube.com/@BLVCKLIGHTai" target="_blank" class="event-glitch" data-text="(@blvcklightai)" style="color: inherit; text-decoration: underline; font-weight: bold; padding: 5px;"></a><br><br>
+                <a href="https://patreon.com/FiresideCreativeTechnology" target="_blank" class="event-glitch" data-text="GET TICKETS HERE" style="font-size: 18px; letter-spacing: 1px; color: inherit; text-decoration: underline; font-weight: bold; padding: 5px;"></a>
+            </p>
+        </div>
+        
+        <div class="modal-logo bottom"></div>
+    </div>
+
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
