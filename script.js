@@ -1418,9 +1418,10 @@ let step1Timeout;
 let step2Timeout;
 let eventStep1Timeout;
 let eventStep2Timeout;
+let eventStaggerTimeouts = []; // Tracks the line-by-line reveal timeouts
 
 glitchEl.innerHTML = '';
-eventGlitchEls.forEach(el => el.innerHTML = ''); // Hide event text on load
+eventGlitchEls.forEach(el => el.innerHTML = ''); // Hide all event text immediately
 
 function closeModal() {
     clearTimeout(step1Timeout);
@@ -1431,6 +1432,11 @@ function closeModal() {
     
     clearTimeout(eventStep1Timeout);
     clearTimeout(eventStep2Timeout);
+    
+    // Clear any staggered line reveals currently running
+    eventStaggerTimeouts.forEach(clearTimeout);
+    eventStaggerTimeouts = [];
+    
     eventModal.classList.remove('step1', 'step2');
     eventScramblers.forEach(obj => {
         cancelAnimationFrame(obj.scrambler.frameRequest);
@@ -1466,10 +1472,20 @@ eventBtn.addEventListener('click', (e) => {
         if (!eventModal.classList.contains('step1')) return; 
         eventModal.classList.add('step2');
         
-        // NEW: Trigger all event scramblers simultaneously
+        // Stagger the scramblers line-by-line.
+        // This prevents frame-drops (snapping) and creates a smooth cascading reveal.
         eventStep2Timeout = setTimeout(() => {
             if (!eventModal.classList.contains('step2')) return;
-            eventScramblers.forEach(obj => obj.scrambler.setText(obj.text));
+            
+            eventStaggerTimeouts = [];
+            eventScramblers.forEach((obj, index) => {
+                const t = setTimeout(() => {
+                    if (eventModal.classList.contains('step2')) {
+                        obj.scrambler.setText(obj.text);
+                    }
+                }, index * 120); // 120ms delay between each line's reveal
+                eventStaggerTimeouts.push(t);
+            });
         }, 200);
         
     }, 350); 
