@@ -111,7 +111,7 @@ body {
 }
 
 /* --- ANIMATED INFO & EVENT MODALS --- */
-#info-modal, #event-modal {
+.modal {
     position: absolute;
     bottom: 40px; 
     left: 50%;
@@ -146,7 +146,7 @@ body {
                 border-color 0.5s ease;
 }
 
-#info-modal.step1, #event-modal.step1 {
+.modal.step1 {
     bottom: 50%;
     transform: translate(-50%, 50%) scale(1);
     opacity: 1;
@@ -200,7 +200,7 @@ body {
                 margin 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-#info-modal.step2 .modal-content, #event-modal.step2 .modal-content {
+.modal.step2 .modal-content {
     max-height: 500px;
     margin-top: 24px;
     margin-bottom: 24px;
@@ -213,171 +213,164 @@ body {
     text-align: justify; 
 }
 
+.modal-content-event {
+    text-align: center;
+}
+
+.event-copy {
+    text-align: center;
+}
+
+.event-glitch {
+    color: inherit;
+}
+
+.event-glitch-link {
+    display: inline-block;
+    color: inherit;
+    text-decoration: underline;
+    font-weight: bold;
+    padding: 5px;
+}
+
+.event-glitch-title {
+    font-size: 18px;
+    letter-spacing: 1px;
+}
+
 
 /* ==========================================================================
    THEME OVERRIDES FOR HTML UI LAYER
    ========================================================================== */
 
-/* --- THEME 1: BLACK LIGHT MODE --- */
-body.theme-1 .social-link {
-    animation: none;
-    stroke: #ff3300;
-    color: #ff3300;
-}
-body.theme-1 .social-link svg {
-    stroke: rgba(255, 51, 0, 0.5);
-}
-body.theme-1 .social-link:hover svg {
-    stroke: #ff3300;
-    filter: drop-shadow(0 0 15px #ff3300);
-}
-body.theme-1 .social-link::after {
-    background: rgba(20, 0, 30, 0.85);
-    border-color: rgba(255, 51, 0, 0.3);
-    color: #ff3300;
-}
-body.theme-1 #info-modal, body.theme-1 #event-modal {
-    background: rgba(20, 0, 30, 0.85);
-    border-color: rgba(255, 51, 0, 0.3);
-    color: #ff3300;
-}
-body.theme-1 .modal-logo {
-    background: linear-gradient(90deg, #6600cc, #ff3300, #6600cc);
-    background-size: 200% 200%;
-    animation: gradient-undulate 1.5s ease-in-out infinite;
-}
-body.theme-1 #glitch-text span, body.theme-1 .event-glitch span {
-    color: #ff3300 !important;
+body[class^="theme-"] {
+    --ui-color: rgba(255, 255, 255, 0.85);
+    --ui-color-soft: rgba(255, 255, 255, 0.5);
+    --ui-tooltip-bg: rgba(255, 255, 255, 0.05);
+    --ui-tooltip-border: rgba(255, 255, 255, 0.1);
+    --ui-modal-bg: rgba(20, 20, 20, 0.4);
+    --ui-modal-border: rgba(255, 255, 255, 0.15);
+    --ui-logo-bg: linear-gradient(90deg, #ff00ff, #00ff00, #ff00ff);
+    --ui-logo-animation: gradient-undulate 3s ease-in-out infinite;
+    --ui-hover-filter: drop-shadow(0 0 15px currentColor);
+    --ui-modal-shadow: none;
+    --ui-glitch-color: currentColor;
+    --ui-hover-bg: transparent;
+    --ui-hover-border: transparent;
+    --ui-hover-shadow: none;
 }
 
-/* --- THEME 2: E-INK LIGHT MODE --- */
-body.theme-2 .social-link {
+body[class^="theme-"] .social-link {
     animation: none;
-    stroke: #26262b;
-    color: #26262b;
-}
-body.theme-2 .social-link svg {
-    stroke: rgba(38, 38, 43, 0.5);
-}
-body.theme-2 .social-link:hover svg {
-    stroke: #26262b;
-    filter: none;
-}
-body.theme-2 .social-link::after {
-    background: rgba(235, 230, 224, 0.85);
-    border-color: rgba(38, 38, 43, 0.2);
-    color: #26262b;
-}
-body.theme-2 #info-modal, body.theme-2 #event-modal {
-    background: rgba(235, 230, 224, 0.85);
-    border-color: rgba(38, 38, 43, 0.3);
-    color: #26262b;
-}
-body.theme-2 .modal-logo {
-    background: #26262b; 
-    animation: none;
-}
-body.theme-2 #glitch-text span, body.theme-2 .event-glitch span {
-    color: #26262b !important;
+    stroke: var(--ui-color);
+    color: var(--ui-color);
 }
 
-/* --- THEME 3: INFRARED / HEAT VISION UI --- */
-body.theme-3 .social-link {
-    animation: none;
-    stroke: #e4de33;
-    color: #e4de33;
-}
-body.theme-3 .social-link svg {
-    stroke: rgba(228, 222, 51, 0.5); /* #e4de33 at 50% */
-}
-body.theme-3 .social-link:hover {
-    background: rgba(180, 24, 20, 0.1);
-    border-color: rgba(180, 24, 20, 0.6);
-    box-shadow: 0 6px 20px rgba(180, 24, 20, 0.2), inset 0 0 15px rgba(180, 24, 20, 0.1);
-}
-body.theme-3 .social-link:hover svg {
-    stroke: #e4de33;
-    filter: drop-shadow(0 0 15px #b41814);
-}
-body.theme-3 .social-link::after {
-    background: rgba(8, 9, 35, 0.85); /* #080923 */
-    border-color: rgba(180, 24, 20, 0.4); 
-    color: #e4de33;
-}
-body.theme-3 #info-modal, body.theme-3 #event-modal {
-    background: rgba(8, 9, 35, 0.85); /* #080923 */
-    border-color: rgba(180, 24, 20, 0.4); /* #b41814 */
-    color: #e4de33;
-    box-shadow: 0 0 30px #b4181433;
-}
-body.theme-3 .modal-logo {
-    background: #e4de33; 
-    animation: none;
-}
-body.theme-3 #glitch-text span, body.theme-3 .event-glitch span {
-    color: #c1c0ae !important; /* Hottest point for glitch characters */
+body[class^="theme-"] .social-link svg {
+    stroke: var(--ui-color-soft);
 }
 
-/* --- THEME 4: TACTICAL RED NIGHT MODE --- */
-body.theme-4 .social-link {
-    animation: none;
-    stroke: #d91a1a;
-    color: #d91a1a;
-}
-body.theme-4 .social-link svg {
-    stroke: rgba(217, 26, 26, 0.5);
-}
-body.theme-4 .social-link:hover svg {
-    stroke: #d91a1a;
-    filter: drop-shadow(0 0 15px #d91a1a);
-}
-body.theme-4 .social-link::after {
-    background: rgba(15, 0, 0, 0.85);
-    border-color: rgba(217, 26, 26, 0.3);
-    color: #d91a1a;
-}
-body.theme-4 #info-modal, body.theme-4 #event-modal {
-    background: rgba(15, 0, 0, 0.85);
-    border-color: rgba(217, 26, 26, 0.3);
-    color: #d91a1a;
-}
-body.theme-4 .modal-logo {
-    background: #d91a1a; 
-    animation: none;
-}
-body.theme-4 #glitch-text span, body.theme-4 .event-glitch span {
-    color: #d91a1a !important;
+body[class^="theme-"] .social-link:hover {
+    background: var(--ui-hover-bg);
+    border-color: var(--ui-hover-border);
+    box-shadow: var(--ui-hover-shadow);
 }
 
-/* --- THEME 5: ASCII MAINFRAME --- */
-body.theme-5 .social-link {
-    animation: none;
-    stroke: #54ff7f;
-    color: #54ff7f;
+body[class^="theme-"] .social-link:hover svg {
+    stroke: var(--ui-color);
+    filter: var(--ui-hover-filter);
 }
-body.theme-5 .social-link svg {
-    stroke: rgba(0, 255, 65, 0.5);
+
+body[class^="theme-"] .social-link::after {
+    background: var(--ui-tooltip-bg);
+    border-color: var(--ui-tooltip-border);
+    color: var(--ui-color);
 }
-body.theme-5 .social-link:hover svg {
-    stroke: #54ff7f;
-    filter: drop-shadow(0 0 15px #00ff41);
+
+body[class^="theme-"] .modal {
+    background: var(--ui-modal-bg);
+    border-color: var(--ui-modal-border);
+    color: var(--ui-color);
+    box-shadow: var(--ui-modal-shadow);
 }
-body.theme-5 .social-link::after {
-    background: rgba(0, 20, 5, 0.85);
-    border-color: rgba(0, 255, 65, 0.3);
-    color: #54ff7f;
+
+body[class^="theme-"] .modal-logo {
+    background: var(--ui-logo-bg);
+    animation: var(--ui-logo-animation);
 }
-body.theme-5 #info-modal, body.theme-5 #event-modal {
-    background: rgba(11, 23, 14, 0.85);
-    border-color: rgba(0, 255, 65, 0.3);
-    color: #54ff7f;
+
+body[class^="theme-"] #glitch-text span,
+body[class^="theme-"] .event-glitch span {
+    color: var(--ui-glitch-color) !important;
 }
-body.theme-5 .modal-logo {
-    background: #54ff7f; 
-    animation: none;
+
+body.theme-1 {
+    --ui-color: #ff3300;
+    --ui-color-soft: rgba(255, 51, 0, 0.5);
+    --ui-tooltip-bg: rgba(20, 0, 30, 0.85);
+    --ui-tooltip-border: rgba(255, 51, 0, 0.3);
+    --ui-modal-bg: rgba(20, 0, 30, 0.85);
+    --ui-modal-border: rgba(255, 51, 0, 0.3);
+    --ui-logo-bg: linear-gradient(90deg, #6600cc, #ff3300, #6600cc);
+    --ui-logo-animation: gradient-undulate 1.5s ease-in-out infinite;
+    --ui-hover-filter: drop-shadow(0 0 15px #ff3300);
+    --ui-glitch-color: #ff3300;
 }
-body.theme-5 #glitch-text span, body.theme-5 .event-glitch span {
-    color: #54ff7f !important;
+
+body.theme-2 {
+    --ui-color: #26262b;
+    --ui-color-soft: rgba(38, 38, 43, 0.5);
+    --ui-tooltip-bg: rgba(235, 230, 224, 0.85);
+    --ui-tooltip-border: rgba(38, 38, 43, 0.2);
+    --ui-modal-bg: rgba(235, 230, 224, 0.85);
+    --ui-modal-border: rgba(38, 38, 43, 0.3);
+    --ui-logo-bg: #26262b;
+    --ui-logo-animation: none;
+    --ui-hover-filter: none;
+    --ui-glitch-color: #26262b;
+}
+
+body.theme-3 {
+    --ui-color: #e4de33;
+    --ui-color-soft: rgba(228, 222, 51, 0.5);
+    --ui-tooltip-bg: rgba(8, 9, 35, 0.85);
+    --ui-tooltip-border: rgba(180, 24, 20, 0.4);
+    --ui-modal-bg: rgba(8, 9, 35, 0.85);
+    --ui-modal-border: rgba(180, 24, 20, 0.4);
+    --ui-logo-bg: #e4de33;
+    --ui-logo-animation: none;
+    --ui-hover-filter: drop-shadow(0 0 15px #b41814);
+    --ui-modal-shadow: 0 0 30px #b4181433;
+    --ui-glitch-color: #c1c0ae;
+    --ui-hover-bg: rgba(180, 24, 20, 0.1);
+    --ui-hover-border: rgba(180, 24, 20, 0.6);
+    --ui-hover-shadow: 0 6px 20px rgba(180, 24, 20, 0.2), inset 0 0 15px rgba(180, 24, 20, 0.1);
+}
+
+body.theme-4 {
+    --ui-color: #d91a1a;
+    --ui-color-soft: rgba(217, 26, 26, 0.5);
+    --ui-tooltip-bg: rgba(15, 0, 0, 0.85);
+    --ui-tooltip-border: rgba(217, 26, 26, 0.3);
+    --ui-modal-bg: rgba(15, 0, 0, 0.85);
+    --ui-modal-border: rgba(217, 26, 26, 0.3);
+    --ui-logo-bg: #d91a1a;
+    --ui-logo-animation: none;
+    --ui-hover-filter: drop-shadow(0 0 15px #d91a1a);
+    --ui-glitch-color: #d91a1a;
+}
+
+body.theme-5 {
+    --ui-color: #54ff7f;
+    --ui-color-soft: rgba(0, 255, 65, 0.5);
+    --ui-tooltip-bg: rgba(0, 20, 5, 0.85);
+    --ui-tooltip-border: rgba(0, 255, 65, 0.3);
+    --ui-modal-bg: rgba(11, 23, 14, 0.85);
+    --ui-modal-border: rgba(0, 255, 65, 0.3);
+    --ui-logo-bg: #54ff7f;
+    --ui-logo-animation: none;
+    --ui-hover-filter: drop-shadow(0 0 15px #00ff41);
+    --ui-glitch-color: #54ff7f;
 }
 
 /* =========================================

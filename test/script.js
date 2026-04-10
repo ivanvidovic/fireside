@@ -10,6 +10,23 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const HALFTONE_CONFIG = { size: 0.6, rotation: Math.PI / 8, shape: 0 };
 
+const EVENT_INFO = {
+    title: 'FIRESIDE [MEETUP]',
+    marqueeTitle: 'Fireside [Meetup]',
+    dateLabel: 'Date & Time:',
+    dateTime: 'Thursday, April 23rd from 6:00-9:00pm',
+    venueLabel: 'Location:',
+    venueName: 'Goodies Snack Shop',
+    venueAddress: '139 NW 2nd Ave, Portland, OR 97209',
+    speakerLabel: 'Guest Speaker:',
+    speakerName: 'BLVCKL!GHT',
+    speakerHandle: '(@blvcklightai)',
+    speakerUrl: 'https://www.youtube.com/@BLVCKLIGHTai',
+    ticketLabel: 'GET TICKETS HERE',
+    ticketUrl: 'https://luma.com/7pxx55kq',
+    guestTheme: 'AI'
+};
+
 // --- LAYER SETUP FOR OPTIMIZED REFLECTIONS ---
 const REFLECTION_LAYER = 1;
 
@@ -46,8 +63,6 @@ const composer = new EffectComposer(renderer, renderTarget);
 const renderScene = new RenderPass(scene, camera);
 
 // --- UNIFIED VISUAL STATE & BLOOM LOGIC ---
-const isMobile = window.innerWidth <= 768; 
-
 const bloomStrength = 0.4;
 const bloomRadius = 2.0;
 const bloomThreshold = 2.0;
@@ -330,349 +345,214 @@ const hitBox = new THREE.Mesh(
 scene.add(hitBox);
 
 
-// --- 1. TOP HOLOGRAPHIC LED MARQUEE (MASTER ANCHOR) ---
-const textCanvas = document.createElement('canvas');
-textCanvas.height = 64;  
-const tCtx = textCanvas.getContext('2d', { willReadFrequently: true });
-
-const ledTexture = new THREE.CanvasTexture(textCanvas);
-ledTexture.minFilter = THREE.NearestFilter;
-ledTexture.magFilter = THREE.NearestFilter;
-ledTexture.wrapS = THREE.RepeatWrapping; 
-ledTexture.wrapT = THREE.ClampToEdgeWrapping;
-
-function updateMarqueeText(text) {
-    tCtx.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
-    const segment = `${text} *** `;
-    const segmentWidth = tCtx.measureText(segment).width;
-    
-    const IDEAL_WIDTH = 1930; 
-    let count = Math.round(IDEAL_WIDTH / segmentWidth);
-    if (count < 1) count = 1; 
-    
-    textCanvas.width = segmentWidth * count;
-    
-    tCtx.fillStyle = '#000000'; 
-    tCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
-    
-    tCtx.fillStyle = '#ffffff'; 
-    tCtx.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
-    tCtx.textAlign = 'left';
-    tCtx.textBaseline = 'middle';
-    
-    for(let i = 0; i < count; i++) {
-        tCtx.fillText(segment, i * segmentWidth, textCanvas.height / 2 + 4); 
+const MARQUEE_FONT = 'bold 50px "SF Mono", "Roboto Mono", monospace';
+const MARQUEE_IDEAL_WIDTH = 1930;
+const MARQUEE_VERTEX_SHADER = `
+    varying vec2 vUv;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
-    
-    ledTexture.needsUpdate = true;
-}
+`;
 
-updateMarqueeText("Fireside [Meetup]");
-
-const ledMat = new THREE.ShaderMaterial({
-    uniforms: {
-        tText: { value: ledTexture },
-        uTime: { value: 0 },
-        uTheme: { value: 0 },
-        uNextTheme: { value: 0 },
-        uTransition: { value: 0.0 }
-    },
-    transparent: true,
-    side: THREE.DoubleSide, 
-    blending: THREE.AdditiveBlending, 
-    depthWrite: false, 
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
+function createLEDFragmentShader({
+    rows,
+    cols,
+    scrollSpeed,
+    invertText,
+    defaultColor,
+    theme1Color,
+    theme3Color,
+    theme5Color
+}) {
+    return `
         uniform sampler2D tText;
         uniform float uTime;
-        uniform int uTheme; 
-        uniform int uNextTheme; 
-        uniform float uTransition; 
+        uniform int uTheme;
+        uniform int uNextTheme;
+        uniform float uTransition;
         varying vec2 vUv;
 
         vec3 getLEDColor(int t) {
-            if (t == 3) return vec3(0.0, 0.0, 5.0); 
-            if (t == 1) return vec3(6.0, 0.5, 0.0); 
-            if (t == 5) return vec3(0.0, 4.0, 0.5); 
-            return vec3(0.0, 5.0, 0.0);             
+            if (t == 3) return vec3(${theme3Color.join(', ')});
+            if (t == 1) return vec3(${theme1Color.join(', ')});
+            if (t == 5) return vec3(${theme5Color.join(', ')});
+            return vec3(${defaultColor.join(', ')});
         }
 
         void main() {
-            float rows = 24.0;   
-            float cols = 720.0;  
+            float rows = ${rows.toFixed(1)};
+            float cols = ${cols.toFixed(1)};
 
             vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
             vec2 sampleUv = gridUv;
-            
-            sampleUv.x += uTime * 0.01; 
-            
+            sampleUv.x += uTime * ${scrollSpeed.toFixed(2)};
+
             vec4 textData = texture2D(tText, sampleUv);
             vec2 cellUv = fract(vUv * vec2(cols, rows)) - 0.5;
             float dist = length(cellUv);
-            float ledRadius = 0.25; 
+            float ledRadius = 0.25;
             float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
-            
-            float isOn = step(0.5, textData.r);
+
+            float isOn = ${invertText ? '1.0 - step(0.5, textData.r)' : 'step(0.5, textData.r)'};
             float finalAlpha = ledMask * isOn;
-            
-            if (finalAlpha < 0.01) discard; 
-            
+
+            if (finalAlpha < 0.01) discard;
+
             vec3 c1 = getLEDColor(uTheme);
             vec3 c2 = getLEDColor(uNextTheme);
             vec3 finalLedColor = mix(c1, c2, uTransition);
-            
+
             gl_FragColor = vec4(finalLedColor, finalAlpha);
         }
-    `
-});
+    `;
+}
 
-const ledGeo = new THREE.CylinderGeometry(2.4, 2.4, 0.5, 64, 16, true);
-const ledRing = new THREE.Mesh(ledGeo, ledMat);
-ledRing.layers.enable(REFLECTION_LAYER); // Add to reflection layer
-ledRing.position.y = 3.0; 
-scene.add(ledRing);
+function configureMarqueeTexture(texture) {
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+}
 
-
-// --- 2. BOTTOM HOLOGRAPHIC LED MARQUEE (CHILD RING) ---
-const textCanvasBottom = document.createElement('canvas');
-textCanvasBottom.height = 64;  
-const tCtxBottom = textCanvasBottom.getContext('2d', { willReadFrequently: true });
-
-let ledTextureBottom = new THREE.CanvasTexture(textCanvasBottom);
-ledTextureBottom.minFilter = THREE.NearestFilter;
-ledTextureBottom.magFilter = THREE.NearestFilter;
-ledTextureBottom.wrapS = THREE.RepeatWrapping; 
-ledTextureBottom.wrapT = THREE.ClampToEdgeWrapping;
-
-let ledMatBottom;
-
-function updateMarqueeBottom(text) {
-    tCtxBottom.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
+function paintMarqueeTexture(ctx, canvas, text, repeatCount) {
+    ctx.font = MARQUEE_FONT;
     const segment = `${text} *** `;
-    const segmentWidth = tCtxBottom.measureText(segment).width;
-    
-    const IDEAL_WIDTH = 1930; 
-    let count = Math.round(IDEAL_WIDTH / segmentWidth);
-    if (count < 1) count = 1; 
+    const segmentWidth = ctx.measureText(segment).width;
+    let count = repeatCount ?? Math.max(1, Math.round(MARQUEE_IDEAL_WIDTH / segmentWidth));
 
-    // Force exactly 3 repeats for the status message override so it fills cleanly
-    if (text === "[ VISION MODE LOCKED ]" || text === "[ VISION MODE UNLOCKED ]") {
-        count = 3;
-    }
-    
-    textCanvasBottom.width = segmentWidth * count;
-    
-    tCtxBottom.fillStyle = '#000000'; 
-    tCtxBottom.fillRect(0, 0, textCanvasBottom.width, textCanvasBottom.height);
-    
-    tCtxBottom.fillStyle = '#ffffff'; 
-    tCtxBottom.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
-    tCtxBottom.textAlign = 'left';
-    tCtxBottom.textBaseline = 'middle';
-    
-    for(let i = 0; i < count; i++) {
-        tCtxBottom.fillText(segment, i * segmentWidth, textCanvasBottom.height / 2 + 4); 
-    }
-    
-    if (ledMatBottom) {
-        ledTextureBottom.dispose();
-        ledTextureBottom = new THREE.CanvasTexture(textCanvasBottom);
-        ledTextureBottom.minFilter = THREE.NearestFilter;
-        ledTextureBottom.magFilter = THREE.NearestFilter;
-        ledTextureBottom.wrapS = THREE.RepeatWrapping; 
-        ledTextureBottom.wrapT = THREE.ClampToEdgeWrapping;
-        ledMatBottom.uniforms.tText.value = ledTextureBottom;
-    } else {
-        ledTextureBottom.needsUpdate = true;
+    canvas.width = segmentWidth * count;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = MARQUEE_FONT;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < count; i++) {
+        ctx.fillText(segment, i * segmentWidth, canvas.height / 2 + 4);
     }
 }
 
-updateMarqueeBottom("Thursday, April 23rd inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209");
+function createMarquee({
+    text,
+    geometry,
+    positionY,
+    parent = scene,
+    rows,
+    cols,
+    scrollSpeed,
+    invertText = false,
+    colorSet,
+    repeatCountMap
+}) {
+    const canvas = document.createElement('canvas');
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const texture = new THREE.CanvasTexture(canvas);
+    configureMarqueeTexture(texture);
 
-ledMatBottom = new THREE.ShaderMaterial({
-    uniforms: {
-        tText: { value: ledTextureBottom },
-        uTime: { value: 0 },
-        uTheme: { value: 0 },
-        uNextTheme: { value: 0 },
-        uTransition: { value: 0.0 }
-    },
-    transparent: true,
-    side: THREE.DoubleSide, 
-    blending: THREE.AdditiveBlending, 
-    depthWrite: false, 
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform sampler2D tText;
-        uniform float uTime;
-        uniform int uTheme; 
-        uniform int uNextTheme; 
-        uniform float uTransition; 
-        varying vec2 vUv;
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            tText: { value: texture },
+            uTime: { value: 0 },
+            uTheme: { value: 0 },
+            uNextTheme: { value: 0 },
+            uTransition: { value: 0.0 }
+        },
+        transparent: true,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        vertexShader: MARQUEE_VERTEX_SHADER,
+        fragmentShader: createLEDFragmentShader({
+            rows,
+            cols,
+            scrollSpeed,
+            invertText,
+            defaultColor: colorSet.default,
+            theme1Color: colorSet.theme1,
+            theme3Color: colorSet.theme3,
+            theme5Color: colorSet.theme5
+        })
+    });
 
-        vec3 getLEDColor(int t) {
-            if (t == 3) return vec3(0.0, 0.0, 2.5); 
-            if (t == 1) return vec3(4.0, 0.4, 0.0); 
-            if (t == 5) return vec3(0.0, 2.5, 0.3); 
-            return vec3(0.0, 2.5, 0.0);             
-        }
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.layers.enable(REFLECTION_LAYER);
+    mesh.position.y = positionY;
+    parent.add(mesh);
 
-        void main() {
-            float rows = 17.0;   
-            float cols = 720.0;  
+    const updateText = (nextText) => {
+        paintMarqueeTexture(ctx, canvas, nextText, repeatCountMap?.[nextText]);
+        texture.needsUpdate = true;
+    };
 
-            vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
-            vec2 sampleUv = gridUv;
-            
-            sampleUv.x += uTime * 0.03; 
-            
-            vec4 textData = texture2D(tText, sampleUv);
-            vec2 cellUv = fract(vUv * vec2(cols, rows)) - 0.5;
-            float dist = length(cellUv);
-            float ledRadius = 0.25; 
-            float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
-            
-            float isOn = 1.0 - step(0.5, textData.r);
-            float finalAlpha = ledMask * isOn;
-            
-            if (finalAlpha < 0.01) discard; 
-            
-            vec3 c1 = getLEDColor(uTheme);
-            vec3 c2 = getLEDColor(uNextTheme);
-            vec3 finalLedColor = mix(c1, c2, uTransition);
-            
-            gl_FragColor = vec4(finalLedColor, finalAlpha);
-        }
-    `
-});
+    updateText(text);
 
-const ledGeoBottom = new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true);
-const ledRingBottom = new THREE.Mesh(ledGeoBottom, ledMatBottom);
-ledRingBottom.layers.enable(REFLECTION_LAYER); // Add to reflection layer
-ledRingBottom.position.y = -0.45; 
-ledRing.add(ledRingBottom);
-
-// ---------------------------------------------------------
-// 3. GUEST SPEAKER HOLOGRAPHIC LED MARQUEE (THIRD RING)
-// ---------------------------------------------------------
-const textCanvasGuest = document.createElement('canvas');
-textCanvasGuest.height = 64;  
-const tCtxGuest = textCanvasGuest.getContext('2d', { willReadFrequently: true });
-
-const ledTextureGuest = new THREE.CanvasTexture(textCanvasGuest);
-ledTextureGuest.minFilter = THREE.NearestFilter;
-ledTextureGuest.magFilter = THREE.NearestFilter;
-ledTextureGuest.wrapS = THREE.RepeatWrapping; 
-ledTextureGuest.wrapT = THREE.ClampToEdgeWrapping;
-
-function updateMarqueeGuest(text) {
-    tCtxGuest.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
-    const segment = `${text} *** `;
-    const segmentWidth = tCtxGuest.measureText(segment).width;
-    
-    const IDEAL_WIDTH = 1930; 
-    let count = Math.round(IDEAL_WIDTH / segmentWidth);
-    if (count < 1) count = 1; 
-    
-    textCanvasGuest.width = segmentWidth * count;
-    
-    tCtxGuest.fillStyle = '#000000'; 
-    tCtxGuest.fillRect(0, 0, textCanvasGuest.width, textCanvasGuest.height);
-    
-    tCtxGuest.fillStyle = '#ffffff'; 
-    tCtxGuest.font = 'bold 50px "SF Mono", "Roboto Mono", monospace'; 
-    tCtxGuest.textAlign = 'left';
-    tCtxGuest.textBaseline = 'middle';
-    
-    for(let i = 0; i < count; i++) {
-        tCtxGuest.fillText(segment, i * segmentWidth, textCanvasGuest.height / 2 + 4); 
-    }
-    
-    ledTextureGuest.needsUpdate = true;
+    return { mesh, material, updateText };
 }
 
-updateMarqueeGuest("Guest Speaker: BLVCKL!GHT (@blvcklightai) Theme: AI");
-
-const ledMatGuest = new THREE.ShaderMaterial({
-    uniforms: {
-        tText: { value: ledTextureGuest },
-        uTime: { value: 0 },
-        uTheme: { value: 0 },
-        uNextTheme: { value: 0 },
-        uTransition: { value: 0.0 }
-    },
-    transparent: true,
-    side: THREE.DoubleSide, 
-    blending: THREE.AdditiveBlending, 
-    depthWrite: false, 
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform sampler2D tText;
-        uniform float uTime;
-        uniform int uTheme; 
-        uniform int uNextTheme; 
-        uniform float uTransition; 
-        varying vec2 vUv;
-
-        vec3 getLEDColor(int t) {
-            if (t == 3) return vec3(0.0, 0.0, 2.5); 
-            if (t == 1) return vec3(4.0, 0.4, 0.0); 
-            if (t == 5) return vec3(0.0, 2.5, 0.3); 
-            return vec3(0.0, 2.5, 0.0);             
-        }
-
-        void main() {
-            float rows = 22.0;   
-            float cols = 420.0;  
-
-            vec2 gridUv = vec2(floor(vUv.x * cols) / cols, floor(vUv.y * rows) / rows);
-            vec2 sampleUv = gridUv;
-            
-            sampleUv.x += uTime * 0.06; 
-            
-            vec4 textData = texture2D(tText, sampleUv);
-            vec2 cellUv = fract(vUv * vec2(cols, rows)) - 0.5;
-            float dist = length(cellUv);
-            float ledRadius = 0.25; 
-            float ledMask = smoothstep(ledRadius, ledRadius - 0.05, dist);
-            
-            float isOn = 1.0 - step(0.5, textData.r);
-            float finalAlpha = ledMask * isOn;
-            
-            if (finalAlpha < 0.01) discard; 
-            
-            vec3 c1 = getLEDColor(uTheme);
-            vec3 c2 = getLEDColor(uNextTheme);
-            vec3 finalLedColor = mix(c1, c2, uTransition);
-            
-            gl_FragColor = vec4(finalLedColor, finalAlpha);
-        }
-    `
+const ledMarquee = createMarquee({
+    text: EVENT_INFO.marqueeTitle,
+    geometry: new THREE.CylinderGeometry(2.4, 2.4, 0.5, 64, 16, true),
+    positionY: 3.0,
+    rows: 24,
+    cols: 720,
+    scrollSpeed: 0.01,
+    colorSet: {
+        default: [0.0, 5.0, 0.0],
+        theme1: [6.0, 0.5, 0.0],
+        theme3: [0.0, 0.0, 5.0],
+        theme5: [0.0, 4.0, 0.5]
+    }
 });
+const ledRing = ledMarquee.mesh;
+const ledMat = ledMarquee.material;
 
-const ledGeoGuest = new THREE.CylinderGeometry(1.7, 1.5, 0.4, 64, 16, true);
-const ledRingGuest = new THREE.Mesh(ledGeoGuest, ledMatGuest);
-ledRingGuest.layers.enable(REFLECTION_LAYER); // Add to reflection layer
-ledRingGuest.position.y = -4.0; 
-ledRing.add(ledRingGuest);
+const bottomMarqueeBaseText = `${EVENT_INFO.dateTime.replace(':00', '')} @ ${EVENT_INFO.venueName} on ${EVENT_INFO.venueAddress}`;
+const bottomMarqueeResetText = `${EVENT_INFO.dateTime.split(' from ')[0]} inside ${EVENT_INFO.venueName} on ${EVENT_INFO.venueAddress}`;
+
+const bottomMarquee = createMarquee({
+    text: bottomMarqueeBaseText,
+    geometry: new THREE.CylinderGeometry(2.4, 2.4, 0.325, 64, 16, true),
+    positionY: -0.45,
+    parent: ledRing,
+    rows: 17,
+    cols: 720,
+    scrollSpeed: 0.03,
+    invertText: true,
+    colorSet: {
+        default: [0.0, 2.5, 0.0],
+        theme1: [4.0, 0.4, 0.0],
+        theme3: [0.0, 0.0, 2.5],
+        theme5: [0.0, 2.5, 0.3]
+    },
+    repeatCountMap: {
+        '[ VISION MODE LOCKED ]': 3,
+        '[ VISION MODE UNLOCKED ]': 3
+    }
+});
+const ledRingBottom = bottomMarquee.mesh;
+const ledMatBottom = bottomMarquee.material;
+
+const guestMarquee = createMarquee({
+    text: `${EVENT_INFO.speakerLabel} ${EVENT_INFO.speakerName} ${EVENT_INFO.speakerHandle} Theme: ${EVENT_INFO.guestTheme}`,
+    geometry: new THREE.CylinderGeometry(1.7, 1.5, 0.4, 64, 16, true),
+    positionY: -4.0,
+    parent: ledRing,
+    rows: 22,
+    cols: 420,
+    scrollSpeed: 0.06,
+    invertText: true,
+    colorSet: {
+        default: [0.0, 2.5, 0.0],
+        theme1: [4.0, 0.4, 0.0],
+        theme3: [0.0, 0.0, 2.5],
+        theme5: [0.0, 2.5, 0.3]
+    }
+});
+const ledMatGuest = guestMarquee.material;
 
 
 // ---------------------------------------------------------
@@ -1407,20 +1287,45 @@ const scrambler = new TextScramble(glitchEl);
 
 const eventBtn = document.getElementById('event-btn');
 const eventModal = document.getElementById('event-modal');
+const eventModalContent = document.getElementById('event-modal-content');
 
-// NEW: Setup an array of scramblers for all the separate event text elements
-const eventGlitchEls = document.querySelectorAll('.event-glitch');
-const eventScramblers = Array.from(eventGlitchEls).map(el => {
-    return { scrambler: new TextScramble(el), text: el.getAttribute('data-text') };
-});
+function renderEventModal() {
+    eventModalContent.innerHTML = `
+        <p class="event-copy">
+            <strong class="event-glitch event-glitch-title" data-text="${EVENT_INFO.title}"></strong><br><br>
+            <strong class="event-glitch" data-text="${EVENT_INFO.dateLabel}"></strong><br>
+            <span class="event-glitch" data-text="${EVENT_INFO.dateTime}"></span><br><br>
+            <strong class="event-glitch" data-text="${EVENT_INFO.venueLabel}"></strong><br>
+            <span class="event-glitch" data-text="${EVENT_INFO.venueName}"></span><br>
+            <span class="event-glitch" data-text="${EVENT_INFO.venueAddress}"></span><br><br>
+            <strong class="event-glitch" data-text="${EVENT_INFO.speakerLabel}"></strong><br>
+            <span class="event-glitch" data-text="${EVENT_INFO.speakerName}"></span><br>
+            <a href="${EVENT_INFO.speakerUrl}" target="_blank" rel="noreferrer" class="event-glitch event-glitch-link" data-text="${EVENT_INFO.speakerHandle}"></a><br><br>
+            <a href="${EVENT_INFO.ticketUrl}" target="_blank" rel="noreferrer" class="event-glitch event-glitch-link event-glitch-title" data-text="${EVENT_INFO.ticketLabel}"></a>
+        </p>
+    `;
+}
+
+renderEventModal();
+
+const eventGlitchEls = Array.from(eventModalContent.querySelectorAll('.event-glitch'));
+const eventScramblers = eventGlitchEls.map((el) => ({
+    scrambler: new TextScramble(el),
+    text: el.getAttribute('data-text')
+}));
+const heatIndicators = [
+    document.querySelector('#heat-legend-left .heat-indicator'),
+    document.querySelector('#heat-legend-right .heat-indicator')
+];
 
 let step1Timeout;
 let step2Timeout;
 let eventStep1Timeout;
 let eventStep2Timeout;
+let eventStaggerTimeouts = []; // Tracks the line-by-line reveal timeouts
 
 glitchEl.innerHTML = '';
-eventGlitchEls.forEach(el => el.innerHTML = ''); // Hide event text on load
+eventGlitchEls.forEach(el => el.innerHTML = ''); // Hide all event text immediately
 
 function closeModal() {
     clearTimeout(step1Timeout);
@@ -1431,6 +1336,11 @@ function closeModal() {
     
     clearTimeout(eventStep1Timeout);
     clearTimeout(eventStep2Timeout);
+    
+    // Clear any staggered line reveals currently running
+    eventStaggerTimeouts.forEach(clearTimeout);
+    eventStaggerTimeouts = [];
+    
     eventModal.classList.remove('step1', 'step2');
     eventScramblers.forEach(obj => {
         cancelAnimationFrame(obj.scrambler.frameRequest);
@@ -1466,10 +1376,20 @@ eventBtn.addEventListener('click', (e) => {
         if (!eventModal.classList.contains('step1')) return; 
         eventModal.classList.add('step2');
         
-        // NEW: Trigger all event scramblers simultaneously
+        // Stagger the scramblers line-by-line.
+        // This prevents frame-drops (snapping) and creates a smooth cascading reveal.
         eventStep2Timeout = setTimeout(() => {
             if (!eventModal.classList.contains('step2')) return;
-            eventScramblers.forEach(obj => obj.scrambler.setText(obj.text));
+            
+            eventStaggerTimeouts = [];
+            eventScramblers.forEach((obj, index) => {
+                const t = setTimeout(() => {
+                    if (eventModal.classList.contains('step2')) {
+                        obj.scrambler.setText(obj.text);
+                    }
+                }, index * 120); // 120ms delay between each line's reveal
+                eventStaggerTimeouts.push(t);
+            });
         }, 200);
         
     }, 350); 
@@ -1564,8 +1484,8 @@ function handleInteractionStart(e) {
         const statusMsg = isAutoCycleLocked ? "[ VISION MODE LOCKED ]" : "[ VISION MODE UNLOCKED ]";
         
         if (marqueeBotTimer) clearTimeout(marqueeBotTimer);
-        updateMarqueeBottom(statusMsg);
-        marqueeBotTimer = setTimeout(() => updateMarqueeBottom("Thursday, April 23rd inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209"), 3000);
+        bottomMarquee.updateText(statusMsg);
+        marqueeBotTimer = setTimeout(() => bottomMarquee.updateText(bottomMarqueeResetText), 3000);
         
         if (!isAutoCycleLocked) idleTimer = 0.0;
         
@@ -1899,8 +1819,7 @@ function animate() {
 
     // --- UPDATE UI HEAT LEGENDS BY CAMERA DISTANCE (Theme 3 Only) ---
     if (currentTheme === 3 || (isTransitioning && nextTheme === 3)) {
-        const indLeft = document.querySelector('#heat-legend-left .heat-indicator');
-        const indRight = document.querySelector('#heat-legend-right .heat-indicator');
+        const [indLeft, indRight] = heatIndicators;
         if (indLeft && indRight) {
             const minD = 2.0;
             const maxD = 50.0;
