@@ -367,7 +367,7 @@ function updateMarqueeText(text) {
     ledTexture.needsUpdate = true;
 }
 
-updateMarqueeText("Fireside [Meetup]");
+updateMarqueeText("Fireside Creative Technoogy");
 
 const ledMat = new THREE.ShaderMaterial({
     uniforms: {
@@ -493,7 +493,7 @@ function updateMarqueeBottom(text) {
     }
 }
 
-updateMarqueeBottom("Thursday, April 23rd from 6-9PM @ Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209");
+updateMarqueeBottom("system status: ONLINE // vision modes: ACTIVE // environment: STABLE ▓▓▓▓▓░░░░░░░░░░░");
 
 ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
@@ -603,7 +603,7 @@ function updateMarqueeGuest(text) {
     ledTextureGuest.needsUpdate = true;
 }
 
-updateMarqueeGuest("Guest Speaker: BLVCKL!GHT (@blvcklightai) Theme: AI");
+updateMarqueeGuest("RENDERING FUTURE PROTOCOLS // STANDBY FOR INCOMING DATA");
 
 const ledMatGuest = new THREE.ShaderMaterial({
     uniforms: {
