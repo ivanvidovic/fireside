@@ -492,7 +492,7 @@ function updateMarqueeBottom(text) {
     }
 }
 
-updateMarqueeBottom("system status: ONLINE // vision modes: ACTIVE // environment: STABLE ▓▓▓▓▓░░░░░░░░░░░");
+updateMarqueeBottom("▓▓▓▓▓▓▓▓▓▓ Exploring the intersection of creativity and emerging tools. ░░░░░░░░░░");
 
 ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
@@ -602,7 +602,7 @@ function updateMarqueeGuest(text) {
     ledTextureGuest.needsUpdate = true;
 }
 
-updateMarqueeGuest("RENDERING FUTURE PROTOCOLS // STANDBY FOR INCOMING DATA");
+updateMarqueeGuest("Stay tuned for our next event // Follow us on Instagram @fireside.technology");
 
 const ledMatGuest = new THREE.ShaderMaterial({
     uniforms: {
