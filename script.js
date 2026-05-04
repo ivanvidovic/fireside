@@ -366,7 +366,7 @@ function updateMarqueeText(text) {
     ledTexture.needsUpdate = true;
 }
 
-updateMarqueeText("Fireside Creative Technoogy");
+updateMarqueeText("Fireside Creative Technology");
 
 const ledMat = new THREE.ShaderMaterial({
     uniforms: {
