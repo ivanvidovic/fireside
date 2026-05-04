@@ -492,7 +492,7 @@ function updateMarqueeBottom(text) {
     }
 }
 
-updateMarqueeBottom("▓▓▓▓▓▓▓▓▓▓ Exploring the intersection of creativity and emerging tools. ░░░░░░░░░░");
+updateMarqueeBottom("▓▓▓▓▓▓▓▓▓▓ Exploring the intersection of creativity and emerging tools ░░░░░░░░░░");
 
 ledMatBottom = new THREE.ShaderMaterial({
     uniforms: {
@@ -1407,14 +1407,16 @@ function handleInteractionStart(e) {
     raycaster.setFromCamera(mouse, camera);
     
     // --- MARQUEE HIJACK CHECK ---
-    const marqueeIntersects = raycaster.intersectObjects([ledRingBottom]); // Only check the second marquee
+const marqueeIntersects = raycaster.intersectObjects([ledRingBottom]); // Only check the second marquee
     if (marqueeIntersects.length > 0) {
         isAutoCycleLocked = !isAutoCycleLocked;
         const statusMsg = isAutoCycleLocked ? "[ VISION MODE LOCKED ]" : "[ VISION MODE UNLOCKED ]";
         
         if (marqueeBotTimer) clearTimeout(marqueeBotTimer);
         updateMarqueeBottom(statusMsg);
-        marqueeBotTimer = setTimeout(() => updateMarqueeBottom("Thursday, April 23rd inside Goodies Snack Shop on 139 NW 2nd Ave, Portland, OR 97209"), 3000);
+        
+        // FIX: Update this string so it reverts to the correct text after 3 seconds
+        marqueeBotTimer = setTimeout(() => updateMarqueeBottom("▓▓▓▓▓▓▓▓▓▓ Exploring the intersection of creativity and emerging tools ░░░░░░░░░░"), 3000);
         
         if (!isAutoCycleLocked) idleTimer = 0.0;
         
