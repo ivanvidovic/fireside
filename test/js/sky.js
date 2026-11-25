@@ -19,9 +19,12 @@ const ease=x=>x*x*(3-2*x);
 const isDark=()=>root.dataset.scheme!=='light';
 
 const glCanvas=sky.querySelector('.sky-gl'),fx=sky.querySelector('.sky-fx'),g=fx.getContext('2d');
+// a few embers fly in front of the banner text: their own canvas, over the sky's area, above the text (clicks pass through)
+const fxF=document.createElement('canvas');fxF.className='sky-front';fxF.setAttribute('aria-hidden','true');sky.after(fxF);
+const gF=fxF.getContext('2d');
 let W=0,H=0,dpr=1,t=0,K=10;               // K: pixels per degree of sky
 let tod=isDark()?1:0,target=tod;
-const PAR={stars:.8,fire:.15,far:.6,near:.35};   // how much each layer lags the page when scrolling (1 = fixed in place)
+const PAR={stars:.8,fire:.15,far:.6,near:.35,front:-.35};   // front: the embers before the text outrun the page   // how much each layer lags the page when scrolling (1 = fixed in place)
 let scrolled=0;
 
 /* ---------------- size ---------------- */
@@ -34,7 +37,8 @@ function size(){
   // they change, and the sky is redrawn straight away, before the browser shows the wiped canvas.
   const s=small()?.4:.6,fw=Math.round(W*dpr),fh=Math.round(H*dpr),gw=Math.max(1,Math.round(W*s)),gh=Math.max(1,Math.round(H*s));
   let wiped=false;
-  if(fx.width!==fw||fx.height!==fh){fx.width=fw;fx.height=fh;wiped=true;}
+  if(fx.width!==fw||fx.height!==fh){fx.width=fxF.width=fw;fx.height=fxF.height=fh;wiped=true;}
+  fxF.style.height=h+'px';
   if(glCanvas.width!==gw||glCanvas.height!==gh){glCanvas.width=gw;glCanvas.height=gh;wiped=true;}
   if(gl){gl.viewport(0,0,glCanvas.width,glCanvas.height);fluidSize();}
   place(true);dirty=true;
@@ -248,10 +252,25 @@ function newEmber(burst){
   const hero=Math.random()<.07,s=hero?rnd(2,3.2):Math.pow(Math.random(),1.6)*1.8+.6,life=rnd(3.2,7.5)*(hero?.85:1);
   const e={x:W/2+(Math.random()+Math.random()+Math.random()-1.5)*W*(burst?.24:.16),y:H+rnd(4,30),vx:rnd(-12,12)*(burst?3:1),vy:burst?rnd(-280,-160):rnd(-80,-40),
     T:1,life,age:0,size:s,hero,lift:rnd(.7,1.3)*(hero?1.35:1)*(burst?1.25:1),
-    drag:rnd(1.4,3)/(.6+s*.35),seed:Math.random()*100,f1:rnd(6,14),f2:rnd(2,5)};
+    drag:rnd(1.4,3)/(.6+s*.35),seed:Math.random()*100,f1:rnd(6,14),f2:rnd(2,5),front:Math.random()<1/8};
+  if(e.front)e.size*=1.5;   // closer: a little bigger (and softer, when drawn)
   // now and then one gets caught in a little eddy and spirals for a moment before rejoining the rise
   if(Math.random()<.08)e.sw={at:rnd(.4,life*.5),dur:rnd(.5,1.2),rate:rnd(5,9)*(Math.random()<.5?-1:1),amp:rnd(45,90),ph:Math.random()*6.3};
   return e;
+}
+// where the banner and strip text sit, in the sky's coordinates (for the front embers to fade over)
+let textEls=[],textAt=-1e9;
+function textRects(){
+  // the slides are built after this file runs, so the list is gathered as it goes (once a second)
+  if(performance.now()-textAt>1000){textAt=performance.now();textEls=[...document.querySelectorAll('.show h1,.show .title,.show .tagline,.show .label,.show .ev-line,.show .cta,.show .ds,.strip .strip-bar,.strip .db')];}
+  const out=[];
+  for(const el of textEls){const r=el.getBoundingClientRect();if(r.width&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth)
+    out.push([r.left-skyRect.left,r.top-skyRect.top,r.right-skyRect.left,r.bottom-skyRect.top]);}
+  return out;
+}
+function overText(rects,x,y){   // 1 inside any text box, easing to 0 within 24px of it
+  let m=0;for(const [l,tp,rt,b] of rects){const dx=Math.max(l-x,0,x-rt),dy=Math.max(tp-y,0,y-b);m=Math.max(m,1-smooth(0,24,Math.hypot(dx,dy)));if(m>=1)break;}
+  return m;
 }
 function stepEmbers(dt){
   const night=smooth(.65,1,ease(tod));
@@ -264,10 +283,11 @@ function stepEmbers(dt){
   glowBoost*=Math.exp(-dt/1.4);breeze+=(breezeTo-breeze)*(1-Math.exp(-dt/1.2));
   const want=(small()?40:85)*night;
   if(!reduced&&want>1){spawnAcc+=dt*want/5;while(spawnAcc>=1){spawnAcc--;embers.push(newEmber(false));}}
-  const off=scrolled*PAR.fire,keep=[];
+  // scrolling: the embers behind lag the page (further away); the ones in front outrun it (closer)
+  const off=scrolled*PAR.fire,offF=scrolled*PAR.front,keep=[];
   for(const e of embers){
-    e.age+=dt;e.T-=dt/e.life;if(e.T<=0||e.y<-40)continue;
-    const a=air(e.x,e.y+off),carry=1.45-e.size*.22;
+    e.age+=dt;e.T-=dt/e.life;if(e.T<=0||e.y+(e.front?offF:0)<-40)continue;
+    const a=air(e.x,e.y+(e.front?offF:off)),carry=1.45-e.size*.22;
     const turb=Math.sin(e.y*.012+t*1.3+e.seed)*26+Math.sin(e.y*.031-t*2.1+e.seed*3)*11+Math.sin(t*.7+e.seed*.5)*8;
     let tx=a[0]*carry+turb+breeze*(1.2-e.size*.2),ty=a[1]*carry-(35+120*e.T)*e.lift;
     if(e.sw){const u=(e.age-e.sw.at)/e.sw.dur;if(u>0&&u<1){const env=Math.sin(Math.PI*u),th=e.sw.rate*(e.age-e.sw.at)+e.sw.ph;tx+=Math.cos(th)*e.sw.amp*env;ty+=Math.sin(th)*e.sw.amp*env;}}
@@ -275,18 +295,21 @@ function stepEmbers(dt){
     e.x+=e.vx*dt;e.y+=e.vy*dt;keep.push(e);
   }
   embers=keep;
-  g.save();g.translate(0,off);g.globalCompositeOperation='lighter';g.lineCap='round';
+  const text=night>.01&&embers.some(e=>e.front)?textRects():[];
+  for(const [c,o] of [[g,off],[gF,offF]]){c.save();c.translate(0,o);c.globalCompositeOperation='lighter';c.lineCap='round';}
   for(const e of embers){
+    const c=e.front?gF:g,o=e.front?offF:off;
     const fl=.72+.28*(.5+.5*Math.sin(t*e.f1+e.seed))*(.5+.5*Math.sin(t*e.f2+e.seed*2));
-    const alpha=Math.min(1,e.age*3)*smooth(0,.22,e.T)*fl*night;
+    let alpha=Math.min(1,e.age*3)*smooth(0,.22,e.T)*fl*night;
+    if(e.front&&alpha>=.01)alpha*=1-.7*overText(text,e.x,e.y+o);   // fades where it crosses the text, so it stays readable
     if(alpha<.01)continue;
     const [r,gg,b]=heat(e.T),sp=Math.hypot(e.vx,e.vy),len=Math.min(22,sp*.035);
-    g.strokeStyle=g.fillStyle=`rgba(${r},${gg},${b},${alpha.toFixed(3)})`;
-    if(len>1.2){g.lineWidth=e.size;g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.x-e.vx/sp*len,e.y-e.vy/sp*len);g.stroke();}
-    else{g.beginPath();g.arc(e.x,e.y,e.size*.6,0,6.283);g.fill();}
-    if(e.hero||e.T>.8){const gs=e.size*(e.hero?7:4.5);g.globalAlpha=alpha*(e.hero?.55:.25)*e.T;g.drawImage(glowSprite,e.x-gs,e.y-gs,gs*2,gs*2);g.globalAlpha=1;}
+    c.strokeStyle=c.fillStyle=`rgba(${r},${gg},${b},${(e.front?alpha*.85:alpha).toFixed(3)})`;
+    if(len>1.2){c.lineWidth=e.size;c.beginPath();c.moveTo(e.x,e.y);c.lineTo(e.x-e.vx/sp*len,e.y-e.vy/sp*len);c.stroke();}
+    else{c.beginPath();c.arc(e.x,e.y,e.size*.6,0,6.283);c.fill();}
+    if(e.front||e.hero||e.T>.8){const gs=e.size*(e.hero?7:e.front?6:4.5);c.globalAlpha=alpha*(e.hero?.55:e.front?.4:.25)*(e.front?1:e.T);c.drawImage(glowSprite,e.x-gs,e.y-gs,gs*2,gs*2);c.globalAlpha=1;}
   }
-  g.restore();
+  g.restore();gF.restore();
 }
 
 /* ---------------- the near clouds' motion: a real fluid ---------------- */
@@ -303,7 +326,10 @@ const AIR_MAX=260,      // 1. px/s: the air's speed eases toward this ceiling
       TRAVEL_MAX=350,    // 3. px: how far any part of the cloud can be carried, eased
       STRETCH_MIN=.4,   //    and how far it can be pulled thin
       PUSH_R=.035,PUSH_K=.15;
-const SLIDE_K=7,SLIDE_DELAY=.08,SLIDE_LEN=3.8;   // slide change: breeze strength, its delay, and how long it lasts (s)   // the push: its breadth, and its strength
+const SLIDE_K=7,SLIDE_DELAY=.08,SLIDE_LEN=3.8;
+// the carousel speeding back to the first slide: a steadier, stronger wind that carries the clouds further
+const GUST_K=2*SLIDE_K,GUST_HOLD=.7,GUST_LEN=5,GUST_TRAVEL=700;   // push, full-strength time (s), settle (s), travel limit (px)
+let travelMax=TRAVEL_MAX;   // slide change: breeze strength, its delay, and how long it lasts (s)   // the push: its breadth, and its strength
 function fluidInit(){
   const ext=gl.getExtension('OES_texture_half_float'),lin=gl.getExtension('OES_texture_half_float_linear');
   if(!ext||!lin)return;
@@ -385,12 +411,19 @@ function stepClouds(dt){
   if(sp>320&&ptr.x>-500){const k=(sp-320)/sp/SIM_PX*PUSH_K;forces.push([ptr.x/W,1-(ptr.y-off)/H,ptr.vx*k,-ptr.vy*k,PUSH_R]);}
   // a slide change: a little after it starts, a soft breeze builds across the sky in its direction and slowly
   // dies away (about 2.5 s), so the clouds drift a short way, unhurried, then settle
-  if(edge.on&&!lastEdgeOn){slideBreeze={dir:Math.sign(edge.vx),t:-SLIDE_DELAY};}
+  if(edge.on&&!lastEdgeOn&&!(slideBreeze&&slideBreeze.gust)){slideBreeze={dir:Math.sign(edge.vx),t:-SLIDE_DELAY};}
   lastEdgeOn=edge.on;
-  if(slideBreeze){slideBreeze.t+=dt;const u=slideBreeze.t/SLIDE_LEN;
+  if(slideBreeze&&slideBreeze.gust){
+    // the rewind: full strength while the slides rush back, then a long settle
+    slideBreeze.t+=dt;const t=slideBreeze.t,u=(t-GUST_HOLD)/GUST_LEN;
+    if(u>=1)slideBreeze=null;else if(t>0){const env=smooth(0,.12,t)*(u>0?Math.pow(1-u,3.5):1),f=slideBreeze.dir*GUST_K*env*dt;
+      for(const [x,y] of [[.25,.3],[.75,.3],[.25,.75],[.75,.75]])forces.push([x,y,f,0,.12]);}}
+  else if(slideBreeze){slideBreeze.t+=dt;const u=slideBreeze.t/SLIDE_LEN;
     if(u>=1)slideBreeze=null;else if(u>0){const env=smooth(0,.035,u)*Math.pow(1-u,3.5),   // takes off at once, then a long, slow settle
       f=slideBreeze.dir*SLIDE_K*env*dt;
       for(const [x,y] of [[.25,.3],[.75,.3],[.25,.75],[.75,.75]])forces.push([x,y,f,0,.12]);}}
+  // the travel limit opens up for the rewind wind and eases back after, so the clouds settle home
+  travelMax+=((slideBreeze&&slideBreeze.gust?GUST_TRAVEL:TRAVEL_MAX)-travelMax)*(1-Math.exp(-dt/(slideBreeze&&slideBreeze.gust?.3:2.5)));
   if(forces.length)energy=1;else energy*=Math.exp(-dt/2.5);
   if(energy<.0005&&FL.quiet>4)return;   // fully calm and settled: nothing to simulate
   FL.quiet=forces.length?0:FL.quiet+dt;
@@ -405,7 +438,7 @@ function stepClouds(dt){
   pass(P.grad,vel.w,b=>{b('uP',prs.r);b('uVel',vel.r);gl.uniform2f(P.grad.u.uTexel,...texel);gl.uniform1f(P.grad.u.uVmax,AIR_MAX/SIM_PX);});vel.swap();
   // the cloud: carried by the air, drifting with itself, relaxing back to its own shape
   pass(P.map,map.w,b=>{b('uVel',vel.r);b('uMap',map.r);gl.uniform2f(P.map.u.uMapTexel,1/W,1/H);gl.uniform2f(P.map.u.uVelScale,SIM_PX,SIM_PX);
-    gl.uniform1f(P.map.u.uDt,dt);gl.uniform1f(P.map.u.uRelax,Math.exp(-dt/4.5));gl.uniform1f(P.map.u.uDrift,reduced?0:-.018*380);gl.uniform1f(P.map.u.uMax,TRAVEL_MAX);});map.swap();
+    gl.uniform1f(P.map.u.uDt,dt);gl.uniform1f(P.map.u.uRelax,Math.exp(-dt/4.5));gl.uniform1f(P.map.u.uDrift,reduced?0:-.018*380);gl.uniform1f(P.map.u.uMax,travelMax);});map.swap();
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,glCanvas.width,glCanvas.height);
 }
 
@@ -515,7 +548,7 @@ function drawSkyGL(fireGlow){
 let inkSet=-1;
 function inks(){
   const f=Math.round(smooth(.32,.62,ease(tod))*40)/40;if(f===inkSet)return;inkSet=f;
-  const c=`color-mix(in srgb,#e9e7df ${f*100}%,#1a1b18)`,st=show.style;
+  const c=`color-mix(in srgb,#ececea ${f*100}%,#1b1b1b)`,st=show.style;
   for(const k of ['ink','muted','accent'])st.setProperty('--'+k,c);
   st.setProperty('--rule-strong',`color-mix(in srgb,${c} 30%,transparent)`);
   st.setProperty('--glass',`color-mix(in srgb,rgba(14,16,24,.34) ${f*100}%,rgba(255,255,255,.34))`);
@@ -534,7 +567,7 @@ function frame(now){
   stepEdge(dt);place(false);inks();stepClouds(dt);
   const fireGlow=(reduced?1:.82+.1*Math.sin(t*1.7)+.06*Math.sin(t*4.3+1.3)+.04*Math.sin(t*9.1))*(1+.55*glowBoost);
   drawSkyGL(fireGlow);
-  g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);gF.setTransform(dpr,0,0,dpr,0,0);gF.clearRect(0,0,W,H);
   drawStars(dt);stepMeteors(dt);stepEmbers(dt);
   if(!drawn&&(catalog||t>1.5)){drawn=true;sky.classList.add('ready');}
   dirty=false;wake();
@@ -552,6 +585,13 @@ function wake(){
 new IntersectionObserver(([en])=>{visible=en.isIntersecting;if(visible){last=performance.now();wake();}}).observe(sky);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){last=performance.now();wake();}});
 addEventListener('scroll',()=>{dirty=true;wake();},{passive:true});
+// the carousel speeding back to the first slide (js/meetups.js): the fire is stoked harder than its own tending,
+// and a steadier wind carries the clouds further
+addEventListener('fireside:stoke',()=>{
+  if(reduced)return;
+  glowBoost=1.6;const n=Math.round(rnd(25,40)*1.5*(small()?.5:1));for(let i=0;i<n;i++)embers.push(newEmber(true));
+  slideBreeze={dir:1,t:-SLIDE_DELAY,gust:true};energy=1;dirty=true;wake();
+});
 addEventListener('fireside:theme',()=>{target=isDark()?1:0;if(!drawn)tod=target;wake();});
 setInterval(()=>{dirty=true;wake();},60000);   // with reduced motion, keep the sky turning once a minute
 

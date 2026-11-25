@@ -7,7 +7,7 @@ export const theme=()=>root.dataset.scheme==='light'?'light':'dark';
 function syncTheme(animate){
   const t=theme();
   themeButton.setAttribute('aria-label',t==='dark'?'Switch to light mode':'Switch to dark mode');
-  document.querySelector('meta[name=theme-color]').content=t==='dark'?'#1a1b18':'#e9e7df';
+  document.querySelector('meta[name=theme-color]').content=t==='dark'?'#1a1a1a':'#e9e8e5';
   dispatchEvent(new CustomEvent('fireside:theme',{detail:{theme:t,animate}}));
 }
 // The palette fades on the root (CSS @property), so the whole page changes on one clock.

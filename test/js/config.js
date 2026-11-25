@@ -6,6 +6,6 @@ export const CONFIG={
   // ORB light intensity per preset family (your saved design uses 110 for Neutral/Studio).
   lightPower:{regular:110,night:100,uv:100},
   // Live meetups endpoint (Cloudflare Worker). Leave empty to use the daily snapshot only.
-  meetupsEndpoint:'https://fireside-meetups.vidovici.workers.dev/',
+  meetupsEndpoint:'',
   meetupsSnapshot:'data/meetups.json'
 };

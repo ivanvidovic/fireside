@@ -38,12 +38,15 @@ const now=Date.now(),today=localKey(now);
 const events=(data&&Array.isArray(data.events)?data.events:[])
   .filter(e=>e&&typeof e.title==='string'&&typeof e.date==='string'&&URL_OK.test(e.url))
   .map(e=>{
+    // a month with no day yet ("2027-02"): shown as that month with the day TBA; it never marks a day in the strip
+    if(/^\d{4}-\d{2}$/.test(e.date)){const t=Date.parse(e.date+'-01T00:00:00Z'),m=new Date(t);m.setUTCMonth(m.getUTCMonth()+1);
+      return {...e,month:true,allDay:true,t,endT:null,key:null,until:m.getTime()};}
     const allDay=/^\d{4}-\d{2}-\d{2}$/.test(e.date),t=Date.parse(allDay?e.date+'T00:00:00Z':e.date);
     const endT=e.end?Date.parse(e.end):null;
     return {...e,allDay,t,endT,key:allDay?e.date:localKey(t),until:allDay?t+864e5:(endT||t+3*36e5)};
   })
   .filter(e=>Number.isFinite(e.t)&&e.until>now).sort((a,b)=>a.t-b.t);
-const next=events[0];
+const next=events.find(e=>!e.month);   // the next meetup with a date
 
 /* ---------------- slideshow: tagline, then a card per upcoming meetup ---------------- */
 const show=$('#show'),slides=$('#slides'),dotsEl=$('#dots'),tpl=$('#ev-tpl');
@@ -51,26 +54,32 @@ const venue=e=>e.venue||(e.location||'').split(',')[0];
 function card(e,i){
   const n=tpl.content.firstElementChild.cloneNode(true),q=s=>n.querySelector(s);
   if(e){
-    const d=keyDate(e.key);
+    const d=e.month?new Date(e.t):keyDate(e.key);
     q('.ev-label').textContent=i===0?'Next meetup':'Upcoming';
     q('.ev-title').textContent=e.title;
-    q('.ev-line').textContent=[span(e),venue(e)].filter(Boolean).join(' · ');
+    q('.ev-line').textContent=e.month?'Time & Place to be Announced':[span(e),venue(e)].filter(Boolean).join(' · ');
     const cta=q('.ev-cta');
-    if(i===0){cta.querySelector('span').textContent='Details';cta.querySelector('i').textContent='↓';}
+    if(e===next){cta.querySelector('span').textContent='Details';cta.querySelector('i').textContent='↓';}
+    else if(e.month){cta.href=LUMA;cta.target='_blank';cta.rel='noopener';cta.querySelector('span').textContent='Get notified on Luma';cta.querySelector('i').textContent='↗';}   // no date to RSVP to yet
     else{cta.href=e.url;cta.target='_blank';cta.rel='noopener';cta.querySelector('span').textContent='RSVP on Luma';cta.querySelector('i').textContent='↗';}
     q('.ds-mon').textContent=UTC({month:'short'}).format(d);
-    q('.ds-day').textContent=String(d.getUTCDate()).padStart(2,'0');
-    q('.long').textContent=UTC({weekday:'long'}).format(d);q('.short').textContent=UTC({weekday:'short'}).format(d);
+    if(e.month){const day=q('.ds-day');day.classList.add('tba');day.setAttribute('aria-label','TBA');day.innerHTML=TBA_SVG;
+      q('.long').textContent='Portland';q('.short').textContent='PDX';}
+    else{q('.ds-day').textContent=String(d.getUTCDate()).padStart(2,'0');
+      q('.long').textContent=UTC({weekday:'long'}).format(d);q('.short').textContent=UTC({weekday:'short'}).format(d);}
   }else{
     q('.ev-label').textContent='Next meetup';q('.ev-title').textContent='To be announced';
     q('.ev-line').textContent='New dates land on Luma first.';
     const cta=q('.ev-cta');cta.href=LUMA;cta.target='_blank';cta.rel='noopener';
-    cta.querySelector('span').textContent='Follow on Luma';cta.querySelector('i').textContent='↗';
-    q('.ds-mon').textContent='Next';const day=q('.ds-day');day.textContent='TBA';day.classList.add('tba');
+    cta.querySelector('span').textContent='Get notified on Luma';cta.querySelector('i').textContent='↗';
+    q('.ds-mon').textContent='Next';const day=q('.ds-day');day.classList.add('tba');day.setAttribute('aria-label','TBA');day.innerHTML=TBA_SVG;
     q('.long').textContent='Portland';q('.short').textContent='PDX';
   }
   return n;
 }
+// "TBA" in the date's place: the pixel font's T, B and A redrawn narrower on its own grid (same cell, same 19-cell height,
+// same 2-cell strokes), so three letters fit the box of a two-digit date at full size.
+const TBA_SVG='<svg viewBox="0 0 32 19" aria-hidden="true"><path d="M0 0h10v1h-10zM0 1h10v1h-10zM4 2h2v1h-2zM4 3h2v1h-2zM4 4h2v1h-2zM4 5h2v1h-2zM4 6h2v1h-2zM4 7h2v1h-2zM4 8h2v1h-2zM4 9h2v1h-2zM4 10h2v1h-2zM4 11h2v1h-2zM4 12h2v1h-2zM4 13h2v1h-2zM4 14h2v1h-2zM4 15h2v1h-2zM4 16h2v1h-2zM4 17h2v1h-2zM4 18h2v1h-2zM12 0h4v1h-4zM12 1h6v1h-6zM12 2h2v1h-2zM16 2h2v1h-2zM12 3h2v1h-2zM17 3h2v1h-2zM12 4h2v1h-2zM17 4h2v1h-2zM12 5h2v1h-2zM17 5h2v1h-2zM12 6h2v1h-2zM16 6h2v1h-2zM12 7h2v1h-2zM16 7h2v1h-2zM12 8h4v1h-4zM12 9h6v1h-6zM12 10h2v1h-2zM16 10h3v1h-3zM12 11h2v1h-2zM17 11h3v1h-3zM12 12h2v1h-2zM18 12h2v1h-2zM12 13h2v1h-2zM18 13h2v1h-2zM12 14h2v1h-2zM18 14h2v1h-2zM12 15h2v1h-2zM17 15h3v1h-3zM12 16h2v1h-2zM16 16h3v1h-3zM12 17h6v1h-6zM12 18h4v1h-4zM26 0h2v1h-2zM26 1h2v1h-2zM26 2h2v1h-2zM25 3h4v1h-4zM25 4h4v1h-4zM25 5h4v1h-4zM25 6h4v1h-4zM24 7h2v1h-2zM28 7h2v1h-2zM24 8h2v1h-2zM28 8h2v1h-2zM24 9h2v1h-2zM28 9h2v1h-2zM24 10h2v1h-2zM28 10h2v1h-2zM23 11h8v1h-8zM23 12h8v1h-8zM23 13h2v1h-2zM29 13h2v1h-2zM23 14h2v1h-2zM29 14h2v1h-2zM22 15h2v1h-2zM30 15h2v1h-2zM22 16h2v1h-2zM30 16h2v1h-2zM22 17h2v1h-2zM30 17h2v1h-2zM22 18h2v1h-2zM30 18h2v1h-2z"/></svg>';
 (events.length?events.slice(0,5):[null]).forEach((e,i)=>slides.append(card(e,i)));
 const all=[...slides.children],N=all.length;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -80,7 +89,9 @@ const dots=all.map((_,i)=>{
   b.setAttribute('aria-label',`Slide ${i+1} of ${N}`);b.addEventListener('click',()=>go(i));dotsEl.append(b);return b;
 });
 function go(i){
-  cur=(i+N)%N;
+  const from=cur;cur=(i+N)%N;
+  // speeding back to the first slide (from the last, or back two or more): stoke the fire, send a wind (js/sky.js)
+  if(cur<from&&(from-cur>=2||(from===N-1&&cur===0)))dispatchEvent(new Event('fireside:stoke'));
   slides.style.transform=`translateX(${-cur*100}%)`;
   all.forEach((el,k)=>{el.inert=k!==cur;el.setAttribute('aria-label',`${k+1} of ${N}`);});
   dots.forEach((d,k)=>{d.classList.toggle('on',k===cur);d.setAttribute('aria-current',k===cur?'true':'false');
@@ -106,7 +117,7 @@ show.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(cur+1);else if(e.
 go(0);
 
 /* ---------------- strip: 14 days from today, longer if the next meetup is further out ---------------- */
-const byDay=new Map();for(const e of events){if(!byDay.has(e.key))byDay.set(e.key,e);}
+const byDay=new Map();for(const e of events){if(e.key&&!byDay.has(e.key))byDay.set(e.key,e);}
 const start=keyDate(today);
 const reach=next?Math.round((keyDate(next.key)-start)/864e5)+1:0;
 const count=Math.min(120,Math.max(14,reach));
