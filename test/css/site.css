@@ -1,0 +1,346 @@
+@font-face{font-family:"AR One Sans";font-style:normal;font-weight:400 700;font-display:swap;src:url(../fonts/ar-one-sans-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"AR One Sans";font-style:normal;font-weight:400 700;font-display:swap;src:url(../fonts/ar-one-sans-latin-ext.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Geist Pixel";font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/geist-pixel-regular.woff2) format("woff2")}
+
+:root{
+  --sans:"AR One Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --pixel:"Geist Pixel",ui-monospace,"SF Mono",Menlo,monospace;
+  --pad:clamp(16px,2.4vw,32px);
+  --col:clamp(380px,36vw,540px);
+  --header:64px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --stage-h:clamp(300px,30vw,440px);   /* banner stage height, shared by every page */
+  --max:1280px;
+  --gutter:max(var(--pad),calc((100% - var(--max)) / 2));   /* content edges: capped width, centered */
+}
+/* Theme switch: the palette itself fades, so every color on the page (gradients and glass included) moves together
+   on one clock. Nothing is snapshotted, so the live shirt is never frozen or doubled. */
+@property --bg{syntax:'<color>';inherits:true;initial-value:#1a1b18}
+@property --ink{syntax:'<color>';inherits:true;initial-value:#ece9df}
+@property --muted{syntax:'<color>';inherits:true;initial-value:#a9ac9e}
+@property --rule{syntax:'<color>';inherits:true;initial-value:transparent}
+@property --rule-strong{syntax:'<color>';inherits:true;initial-value:transparent}
+@property --accent{syntax:'<color>';inherits:true;initial-value:#d7efaa}
+@property --btn{syntax:'<color>';inherits:true;initial-value:#d7efaa}
+@property --btn-ink{syntax:'<color>';inherits:true;initial-value:#161810}
+@property --btn-hover{syntax:'<color>';inherits:true;initial-value:#eef5dd}
+@property --scroll{syntax:'<color>';inherits:true;initial-value:transparent}
+@property --grain-o{syntax:'<number>';inherits:true;initial-value:0}
+/* Palette: Terence's moss family (#d7efaa lime, #eef5dd, #697851 moss, #bbbeb1 moss-grey). */
+[data-scheme=dark]{
+  color-scheme:dark;
+  --bg:#1a1b18;--ink:#ece9df;--muted:#a9ac9e;--rule:rgba(187,190,177,.14);--rule-strong:rgba(187,190,177,.32);
+  --accent:#d7efaa;--btn:#d7efaa;--btn-ink:#161810;--btn-hover:#eef5dd;
+  --scroll:rgba(105,120,81,.62);--grain-o:.0715;
+}
+[data-scheme=light]{
+  color-scheme:light;
+  --bg:#e9e7df;--ink:#1c1d19;--muted:#585b50;--rule:rgba(28,29,25,.14);--rule-strong:rgba(28,29,25,.34);
+  --accent:#56643f;--btn:#4f5c3a;--btn-ink:#f3f1ea;--btn-hover:#43502f;
+  --scroll:rgba(86,100,63,.5);--grain-o:.052;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:var(--header);background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--sans);-webkit-text-size-adjust:100%;scroll-behavior:smooth;
+  transition:--bg .5s var(--ease),--ink .5s var(--ease),--muted .5s var(--ease),--rule .5s var(--ease),--rule-strong .5s var(--ease),--accent .5s var(--ease),--btn .5s var(--ease),--btn-ink 0s linear .12s,--btn-hover .5s var(--ease),--scroll .5s var(--ease),--grain-o .5s var(--ease);
+  scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+::-webkit-scrollbar{width:6px;height:6px;background:transparent}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:3px}
+body{margin:0;min-height:100svh;position:relative}
+h1,h2,p,ol,ul,fieldset{margin:0;padding:0}
+a{color:inherit;text-underline-offset:.25em;text-decoration-thickness:1px}
+a:hover{color:var(--accent)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+[hidden]{display:none!important}
+.top,.shirt-stage,.slider,.buy,.cta,.icon,.text-link,.db,.rowarrow{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+.buy,.cta,.icon,.text-link,.db a{touch-action:manipulation}
+html.holding,html.holding *{-webkit-user-select:none!important;user-select:none!important}
+
+/* ---------- 3D shirt (Gear): canvas inside the banner stage, scrolls with the page ---------- */
+#shirt{position:absolute;z-index:0;display:block;pointer-events:none;outline:none;max-width:none;opacity:0;transition:opacity .6s var(--ease)}
+html.live #shirt{opacity:1}
+html.no-webgl #shirt{display:none}
+
+/* ---------- grain ---------- */
+.grain{position:absolute;inset:0;z-index:7;pointer-events:none;background-image:var(--grain-img,none);background-size:256px 256px;mix-blend-mode:soft-light;opacity:var(--grain-o);transition:opacity .5s var(--ease)}
+
+/* ---------- header ---------- */
+.top{position:fixed;z-index:5;isolation:isolate;transform:translateZ(0);top:0;left:0;right:0;height:var(--header);display:flex;align-items:center;justify-content:space-between;padding:0 var(--gutter);pointer-events:none}
+.top::before{content:"";position:absolute;inset:0;z-index:-1;background:color-mix(in srgb,var(--bg) 62%,transparent);-webkit-backdrop-filter:blur(16px) saturate(1.15);backdrop-filter:blur(16px) saturate(1.15);will-change:backdrop-filter;transition:background-color .5s var(--ease)}   /* glass always on */
+.top>*{pointer-events:auto}
+.mark{display:block;color:var(--ink)}
+.mark:hover{color:var(--accent)}
+.logo{display:block;width:200px;aspect-ratio:1410.14/268.5;background:currentColor;-webkit-mask:url(../assets/logo-horizontal.svg) center/contain no-repeat;mask:url(../assets/logo-horizontal.svg) center/contain no-repeat;transition:background-color .3s}
+.top nav{display:flex;align-items:center;gap:24px}
+.top .links{display:flex;align-items:center;gap:clamp(4px,1.4vw,18px)}
+.top .icons{display:flex;align-items:center}
+.top .icons .icon+.icon{margin-left:-4px}
+.text-link{display:inline-flex;align-items:center;gap:3px;font-size:.9rem;text-decoration:none;padding:8px 6px;color:var(--ink)}
+.text-link{position:relative}
+/* Nav: one colour, one line at the icons' own stroke weight (js/common.js draws it). Hovering draws its bottom stretch,
+   the underline, from the left; the current page has the whole pill round icon and label (a circle round the icon on phones) */
+.text-link .pill{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.text-link .pill path{fill:none;stroke:currentColor;stroke-width:calc(20px * 1.6 / 24);stroke-linecap:butt;stroke-dasharray:var(--L) var(--L);stroke-dashoffset:var(--L);transition:stroke-dashoffset .25s var(--ease)}
+.text-link:hover{color:var(--ink)}   /* no green in the nav */
+.text-link:hover .pill path{stroke-dashoffset:var(--u)}
+.text-link[aria-current=page] .pill path{stroke-dashoffset:0px}
+.text-link .pill path.still{transition:none}
+.text-link svg,.icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.icon{display:inline-grid;place-items:center;width:40px;height:40px;border:0;background:none;padding:0;cursor:pointer;color:var(--ink);border-radius:50%}
+.icon:hover{opacity:.72}
+.icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+[data-scheme=dark] .theme-toggle .moon,[data-scheme=light] .theme-toggle .sun{display:none}
+
+/* ---------- page template: banner, then sections ---------- */
+main{position:relative;z-index:2;display:block;overflow-x:clip}
+.banner,.tag-slide,.strip,.stack,.gallery,.foot{padding-left:var(--gutter);padding-right:var(--gutter)}
+.banner{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--pad);padding-top:calc(var(--header) + 56px);padding-bottom:88px}
+.banner>.stage{height:var(--stage-h)}
+.banner:has(.shirt-stage){position:relative}   /* the shirt is clipped in gear.js: below the divider it sits under the Pre-order glass */
+/* Pre-order section: blurred glass at the divider, solid page color 160px down, so a zoomed shirt fades out under it. */
+.order-sec{position:relative;z-index:1;background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 62%,transparent),var(--bg) 160px);-webkit-backdrop-filter:blur(16px) saturate(1.15);backdrop-filter:blur(16px) saturate(1.15)}
+.lead{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;gap:32px;min-width:0}
+
+.lead .label{text-box:trim-both cap alphabetic}
+.lead>div:last-child{display:flex;flex-direction:column;align-items:flex-start}
+h1,.title{font-weight:600;font-size:clamp(44px,4.6vw,80px);line-height:.92;letter-spacing:-.035em;margin:12px 0 0;text-wrap:balance}
+.line{font-size:clamp(1.2rem,1.8vw,1.6rem);margin:0 0 16px}
+.cta{display:inline-flex;align-items:center;gap:12px;height:56px;padding:0 24px;border-radius:28px;background:var(--btn);color:var(--btn-ink);font-weight:650;font-size:1.02rem;text-decoration:none;align-self:flex-start;transition:background-color .2s}
+.cta i{font-style:normal}
+.cta:hover{background:var(--btn-hover);color:var(--btn-ink)}
+/* Sky banner (Meetups): glass button over the sky, in the banner's one text colour (set by js/sky.js) */
+.show{color:var(--ink)}   /* so plain text in the banner takes the banner's colour too */
+.show .cta{justify-content:center;background:var(--glass);color:var(--ink);border:1px solid color-mix(in srgb,var(--ink) 16%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+.show .cta:hover{background:var(--glass-hover);color:var(--ink)}
+.stage{position:relative;display:grid;place-items:center;align-self:stretch;min-width:0}
+.label{font:400 .74rem/1.2 var(--pixel);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Meetups stage: the date lockup sets the banner height; the lead matches its top and bottom. */
+/* Date lockup (Geist Pixel cap height = .722em): sized so DEC, 02 and the weekday, with 16px gaps,
+   exactly fill the stage height. */
+.ds{--mon:calc(var(--stage-h) * .075);--wk:calc(var(--stage-h) * .036);
+  display:grid;justify-items:center;row-gap:16px;align-self:center}
+.ds>*{text-box:trim-both cap alphabetic}
+.ds-mon{font:400 var(--mon)/1 var(--pixel);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.ds-day{font:400 calc((var(--stage-h) - 32px) / .722 - var(--mon) - var(--wk))/1 var(--pixel);letter-spacing:-.02em}
+.ds-day.tba{color:var(--muted)}
+.ds-wk{font:400 var(--wk)/1 var(--pixel);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+
+/* Gear stage: the shirt is drawn so its collar meets the top edge and its shadow the bottom edge. */
+.shirt-stage{cursor:grab;touch-action:pan-y;outline:none}
+.shirt-stage.dragging{cursor:grabbing}
+.shirt-stage:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.hint{position:absolute;left:50%;bottom:-48px;translate:-50% 0;font:400 .72rem/1 var(--pixel);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);opacity:0;transition:opacity .8s var(--ease);white-space:nowrap}
+html.live .hint{opacity:1}
+html.interacted .hint{opacity:0}
+
+/* Meetups slideshow: tagline, then one card per upcoming meetup; timer dots advance it. */
+.show{position:relative;z-index:1;overflow:hidden;padding-top:var(--header)}
+/* Banners are for looking and clicking, not selecting (clicks in the night sky launch shooting stars). */
+.show,.banner{-webkit-user-select:none;user-select:none}
+/* Meetups sky (js/sky.js): from the top of the page, under the top bar, down under the calendar strip's glass.
+   It fades in from the page colour once its first frame is drawn, and fades out at the bottom, so there is no edge. */
+.sky{position:absolute;z-index:0;top:0;left:0;right:0;pointer-events:none;overflow:hidden;
+  -webkit-mask-image:linear-gradient(#000 calc(100% - 160px),transparent);mask-image:linear-gradient(#000 calc(100% - 160px),transparent)}
+.sky canvas{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .6s var(--ease)}
+.sky.ready canvas{opacity:1}
+.slides{display:flex;align-items:flex-start;transition:transform .7s var(--ease);touch-action:pan-y}
+.slide{flex:0 0 100%;min-width:0}
+.show .banner{padding-top:56px;padding-bottom:88px}
+.tag-slide{display:flex;align-items:center;justify-content:center;height:calc(56px + var(--stage-h) + 88px);padding-top:56px;padding-bottom:88px;container-type:inline-size}
+.tagline{width:100%;font-weight:600;font-size:min(6.2cqi,calc(var(--stage-h) * .24));line-height:1;letter-spacing:-.03em;text-align:center;text-wrap:balance}
+.ds-wk .short{display:none}
+.dots{position:absolute;left:50%;translate:-50% 0;bottom:32px;display:flex;gap:8px}
+.dot{position:relative;width:36px;height:24px;padding:0;border:0;background:none;cursor:pointer}
+.dot::before,.dot i{content:"";position:absolute;left:0;top:10px;height:4px;border-radius:2px}
+.dot::before{right:0;background:var(--rule-strong)}
+.dot i{width:0;background:var(--ink)}
+.dot.on i{animation:fill var(--slide-time,6s) linear forwards}
+.show.paused .dot.on i{animation-play-state:paused}
+.show.still .dot.on i{animation:none;width:100%}
+@keyframes fill{to{width:100%}}
+
+/* Strip of days under the Meetups banner */
+.strip{padding-top:16px;padding-bottom:24px;border-top:1px solid var(--rule-strong);border-bottom:1px solid var(--rule);
+  position:relative;z-index:1;background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 62%,transparent),var(--bg) 160px);-webkit-backdrop-filter:blur(16px) saturate(1.15);backdrop-filter:blur(16px) saturate(1.15)}   /* glass over the sky */
+.strip-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.side-link{font-size:.88rem;color:var(--muted);text-decoration:none}
+.rowwrap{position:relative}
+.dayrow{list-style:none;display:grid;grid-auto-flow:column;grid-auto-columns:calc(100% / 14);overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain}
+.dayrow::-webkit-scrollbar{display:none}
+.dayrow.dragging{cursor:grabbing}
+.dayrow.dragging a{pointer-events:none}
+.dayrow.fade-r{-webkit-mask-image:linear-gradient(to right,#000 88%,transparent);mask-image:linear-gradient(to right,#000 88%,transparent)}
+.dayrow.fade-l{-webkit-mask-image:linear-gradient(to right,transparent,#000 12%);mask-image:linear-gradient(to right,transparent,#000 12%)}
+.dayrow.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(to right,transparent,#000 12%,#000 88%,transparent)}
+.rowarrow{position:absolute;top:50%;translate:0 -50%;width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--rule-strong);border-radius:50%;background:var(--bg);color:var(--ink);cursor:pointer;z-index:1}
+.rowarrow[hidden]{display:none}
+.rowarrow.prev{left:-4px}.rowarrow.next{right:-4px}
+.rowarrow:hover{border-color:var(--ink)}
+.rowarrow svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.db{position:relative;border-left:1px solid var(--rule)}
+.db:first-child{border-left:0}
+.db>*{display:grid;justify-items:center;gap:4px;padding:10px 0 12px;text-decoration:none;color:inherit;height:100%}
+.db .w{font:400 .62rem/1 var(--pixel);letter-spacing:.08em;color:var(--muted)}
+.db .n{font:400 1.25rem/1 var(--pixel)}
+.db .m{font:400 .62rem/1 var(--pixel);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);height:.62rem}
+.db.today::after{content:"";position:absolute;left:25%;right:25%;bottom:3px;height:2px;background:var(--ink)}
+.db.ev{background:var(--btn);color:var(--btn-ink)}
+.db.ev .w,.db.ev .m{color:var(--btn-ink)}
+.db.ev a:hover{background:var(--btn-hover);color:var(--btn-ink)}
+.db.ev.today::after{background:var(--btn-ink)}
+.strip-status{color:var(--muted);font-size:.9rem;margin-top:12px}
+.strip-status:empty{display:none}
+
+/* Section: everything in the left column, an image in the right (stacked on phones) */
+.stack{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px var(--pad);align-items:stretch;padding-top:48px;padding-bottom:56px}
+.banner+.stack{border-top:1px solid var(--rule)}
+.stack-head{min-width:0}
+/* Meetups: Chain Reaction tease between the calendar and Next meetup. */
+.stack.promo{align-items:stretch;border-bottom:1px solid var(--rule);padding-top:24px;padding-bottom:24px}
+/* Desktop: the strip is exactly as tall as the text beside it. Stacked layouts: the photo's own shape. */
+.promo-media{display:block;position:relative}
+.promo-img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;object-position:50% 85%}
+.promo-link{display:inline-block;margin-top:20px;font-size:1.12rem;color:var(--accent);text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:1px}
+.stack-head .label{text-box:trim-both cap alphabetic;margin-bottom:14px}
+.stack-head .details{margin-top:28px}
+.stack-head{align-self:start}
+/* The image matches the left column's height, top to bottom. */
+.stack-media{margin:0;position:relative;min-height:320px;display:flex;flex-direction:column}
+#d-media{overflow:hidden;background:color-mix(in srgb,var(--ink) 6%,transparent)}
+#d-media .d-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 36%;flex:none;aspect-ratio:auto}   /* cropped to fit, never stretched */
+#d-media .d-img[hidden],#d-media .placeholder[hidden]{display:none}
+.stack-media img{flex:1 1 0;min-height:0;display:block;width:100%;height:auto;object-fit:cover;object-position:50% 35%}
+.stack-media.mockup img{background:#191919;object-position:50% 50%}
+/* Placeholder until events have images: ripples, in the spirit of Chain Reaction. */
+.placeholder{position:absolute;inset:0;
+  background:repeating-radial-gradient(circle at 50% 55%,color-mix(in srgb,var(--accent) 22%,transparent) 0 1px,transparent 1px 22px),
+             radial-gradient(circle at 50% 55%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 70%)}
+.h2{font-size:clamp(36px,3.6vw,56px);font-weight:600;line-height:1;letter-spacing:-.03em;text-wrap:balance;text-box:trim-both cap alphabetic}
+.spec-big{margin-top:20px;font-size:1.3rem;font-weight:600;letter-spacing:-.01em}
+.spec-big .price{font:400 1.9rem/1 var(--pixel);letter-spacing:0}
+.line .price{font-family:var(--pixel);letter-spacing:0}
+.order-sec .sub{color:var(--muted);font-size:1rem}
+.order-col{display:grid;gap:12px;min-width:0;align-content:start}
+.stack-head #buy,.stack-head .checkout{margin-top:28px}   /* size slider and button sit under the note */
+
+.sub{margin-top:20px;font-size:1.12rem}
+.action{display:grid;gap:12px;margin-top:32px}
+a.buy{text-decoration:none}
+a.buy:hover{color:var(--btn-ink)}
+
+/* ---------- order ---------- */
+#buy{display:grid;gap:12px}
+#buy[hidden]{display:none}
+.sizes{border:0;min-width:0}
+.choices{display:flex;gap:8px;flex-wrap:wrap}
+.choices label{display:inline-flex;align-items:center;gap:6px;font:400 1.1rem/1 var(--pixel)}
+html.js .choices{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.slider{display:none;position:relative;height:56px;touch-action:pan-y;cursor:pointer}
+html.js .slider{display:block}
+.slider .track{position:absolute;left:0;right:0;top:50%;height:1px;background:color-mix(in srgb,var(--ink) 32%,var(--bg))}
+.slider .tick{position:absolute;top:50%;width:1px;height:12px;margin-top:-6px;background:color-mix(in srgb,var(--ink) 32%,var(--bg))}   /* solid, so crossings don't darken */
+.handle{position:absolute;z-index:1;left:0;top:50%;margin-top:-28px;height:56px;width:var(--handle-w);display:flex;align-items:center;justify-content:center;gap:8px;
+  border:1px solid var(--ink);border-radius:28px;background:var(--bg);color:var(--ink);font:400 1.5rem/1 var(--pixel);letter-spacing:.04em;
+  cursor:grab;will-change:transform;transition:width .2s var(--ease),background-color .25s var(--ease),color .25s var(--ease),border-color .25s var(--ease)}
+.handle svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.handle.on svg{display:none}
+.handle.on{background:var(--ink);color:var(--bg)}
+html.holding .handle{cursor:grabbing}
+.sizes:has(input:focus-visible) .handle{outline:2px solid var(--accent);outline-offset:3px}
+.buy{width:100%;min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 24px;border:0;border-radius:28px;background:var(--btn);color:var(--btn-ink);font-weight:650;font-size:1.02rem;cursor:pointer;transition:background-color .2s}
+.buy:hover{background:var(--btn-hover)}
+/* Slider and button share one row; below ~300px of slider the button wraps under it. */
+.order-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.order-row .sizes{flex:1000 1 300px;min-width:0;margin:0;padding:0;border:0}
+.order-row .buy{flex:1 0 auto;width:auto;gap:12px;padding:0 24px}   /* natural width beside the slider; full width when it wraps to its own line */
+/* Until a size is picked the button doesn't link anywhere; tapping it nudges the slider. */
+
+.checkout{list-style:none;display:grid;gap:8px}
+.checkout[hidden]{display:none}
+.checkout a{display:block;padding:12px 14px;border:1px solid var(--rule-strong);text-decoration:none}
+.details{display:grid;gap:12px}
+.details div{display:grid;grid-template-columns:80px minmax(0,1fr);gap:16px;align-items:baseline}
+.details dt{font:400 .72rem/1.2 var(--pixel);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.details dd{margin:0;font-size:.92rem;line-height:1.45;color:var(--ink)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- gallery ---------- */
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:20px 12px;padding-bottom:56px}
+.gallery figure{position:relative;margin:0;display:flex;flex-direction:column}
+.gallery img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.gallery .g-port img{aspect-ratio:4/5}
+.gallery .mockup img{background:#191919}
+/* Captions sit under their image, in the site's small pixel label style. */
+figcaption{padding-top:10px;font:400 .66rem/1.2 var(--pixel);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+.foot{text-align:center;padding-top:24px;padding-bottom:calc(40px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);color:var(--muted);font-family:var(--pixel);font-size:.82rem}
+
+/* ---------- phones and narrow windows ---------- */
+/* Image loading (js/reveal.js): the picture is held off-box (its average colour shows) until it scans in. */
+/* day / night image pairs (js/reveal.js): the average colour behind each follows the theme; without JS, the night fallback */
+img[data-day]{--avg:var(--avg-night)}
+[data-scheme=light] img[data-day]{--avg:var(--avg-day)}
+html:not(.js) img[data-day]{display:none}
+img.rv-wait{object-position:-200vw 0!important}
+.rv-canvas{position:absolute;pointer-events:none}
+img.rv-fade{animation:rv-fade .4s ease both}
+@keyframes rv-fade{from{opacity:0}}
+/* Theme switch: elements keep their own transitions off while the palette fades on the root (see the @property block). */
+html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:none!important}
+
+@media (max-width:899px){
+  :root{--header:56px}
+  .logo{width:150px}
+  /* narrow phones: the logo drops "creative technology" and keeps its size, leaving room for the nav icons */
+  @media (max-width:379px){.logo{width:calc(150px * 849 / 1410.14);aspect-ratio:849/268.5;-webkit-mask-image:url(../assets/logo-wordmark.svg);mask-image:url(../assets/logo-wordmark.svg)}}
+  @media (max-width:359px){:root{--pad:12px}.text-link{margin-right:-13px}.top .icons .icon+.icon{margin-left:-13px}}
+  .top nav{gap:0}
+  .top .links{gap:0}
+  .text-link{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;margin-right:-8px}
+  .text-link span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .icon{width:44px;height:44px}
+  .top .icons .icon+.icon{margin-left:-8px}
+  .banner{grid-template-columns:minmax(0,1fr);padding-top:calc(var(--header) + 24px);padding-bottom:40px;gap:32px}
+  /* Tablets: glass behind the banner text (same as the header), so the shirt blurs behind it. */
+  .banner:has(.shirt-stage) .lead::before{content:"";position:absolute;z-index:-1;pointer-events:none;top:-32px;bottom:-40px;left:calc(-1 * var(--gutter));right:calc(-1 * var(--gutter));
+    background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 62%,transparent),var(--bg) 92%);   /* glass at the top, solid page color where it meets the divider */
+    -webkit-backdrop-filter:blur(16px) saturate(1.15);backdrop-filter:blur(16px) saturate(1.15)}
+  .stage{order:-1}
+  .banner>.stage{height:auto}
+  .banner>.shirt-stage{height:min(52svh,118vw)}
+  .hint{bottom:6px}
+  .show .banner{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"tile head" "foot foot";column-gap:16px;row-gap:24px;padding-top:24px;padding-bottom:72px;align-content:center}
+  .show .banner .stage{order:0;grid-area:tile;align-self:start}
+  .show .lead{display:contents}
+  .show .lead .lead-top{grid-area:head;align-self:start}
+  .show .lead .lead-bottom{grid-area:foot}
+  .show .ds{min-width:84px;padding:12px 14px;border:1px solid var(--rule-strong);border-radius:12px;row-gap:8px}
+  .show .ds-mon{font-size:.9rem;letter-spacing:.16em}
+  .show .ds-day{font-size:44px;margin:0}
+  .show .ds-day.tba{font-size:30px}
+  .show .ds-wk{font-size:.62rem;letter-spacing:.12em}
+  .show .ds-wk .long{display:none}.show .ds-wk .short{display:inline}
+  .show .title{font-size:clamp(30px,8.4vw,44px);margin-top:10px}
+  .show .label{text-box:trim-both cap alphabetic}
+  .slides{align-items:stretch}
+  .tag-slide{height:auto;padding-top:24px;padding-bottom:72px}
+  .tagline{font-size:9.2cqi}
+  .dots{bottom:24px}
+  h1{font-size:clamp(44px,12vw,64px)}
+  .lead{gap:24px}
+  .dayrow{grid-auto-columns:calc(100% / 7)}
+  .stack{grid-template-columns:minmax(0,1fr);padding-top:40px;padding-bottom:40px}
+  .promo-img{position:static;height:auto;aspect-ratio:1122/311}
+  .stack-media{min-height:0}
+  .stack-media img{flex:none;aspect-ratio:4/3}
+  #d-media{order:-1;aspect-ratio:3/1}
+  .gallery{grid-template-columns:1fr}
+  .details div{grid-template-columns:minmax(0,1fr);gap:4px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}

@@ -1,104 +1,89 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-scheme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>fireside.technology</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meetups · Fireside Creative Technology</title>
+<meta name="description" content="Fireside Creative Technology meets in Portland to share projects, stories, and ideas around creative technology.">
+<meta name="theme-color" content="#1a1b18">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="canonical" href="https://fireside.technology/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fireside.technology/">
+<meta property="og:title" content="Meetups · Fireside Creative Technology">
+<meta property="og:description" content="Fireside Creative Technology meets in Portland to share projects, stories, and ideas around creative technology.">
+<meta property="og:image" content="https://fireside.technology/assets/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<script>
+/* Theme before first paint. */
+(function(){var d=document.documentElement,s=null;d.classList.add('js');
+  try{s=localStorage.getItem('fireside:theme');}catch(e){}
+  d.dataset.scheme=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');})();
+</script>
+<link rel="preload" href="fonts/ar-one-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/site.css">
+<script type="module" src="js/meetups.js"></script>
 </head>
 <body>
-    <div id="canvas-container"></div>
-    
-    <div id="heat-legend-left" class="heat-legend">
-        <div class="heat-bar-wrapper">
-            <div class="heat-bar"></div>
-            <div class="heat-indicator">
-                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="4,2 20,12 4,22" /></svg>
-                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="20,2 4,12 20,22" /></svg>
-            </div>
-        </div>
+<div class="grain" aria-hidden="true"></div>
+<header class="top">
+  <a class="mark" href="./" aria-label="Fireside Creative Technology, meetups"><span class="logo" aria-hidden="true"></span></a>
+  <nav aria-label="Main">
+    <div class="links">
+      <a class="text-link" href="./" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Meetups</span></a>
+      <a class="text-link" href="gear/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8z"/><path d="M9 10.5V6.5a3 3 0 0 1 6 0v4"/></svg><span>Gear</span></a>
     </div>
-    
-    <div id="heat-legend-right" class="heat-legend">
-        <div class="heat-bar-wrapper">
-            <div class="heat-bar"></div>
-            <div class="heat-indicator">
-                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="4,2 20,12 4,22" /></svg>
-                <svg viewBox="0 0 24 24" width="14" height="14"><polygon fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" points="20,2 4,12 20,22" /></svg>
-            </div>
-        </div>
+    <div class="icons">
+      <a class="icon" href="https://patreon.com/FiresideCreativeTechnology" target="_blank" rel="noopener" aria-label="Patreon (opens in a new tab)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="16" cy="10" r="6"/><rect x="3" y="4" width="5" height="16" rx="2.5"/></svg></a>
+      <a class="icon" href="https://instagram.com/fireside.technology" target="_blank" rel="noopener" aria-label="Instagram (opens in a new tab)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a>
+      <button class="icon theme-toggle" type="button" aria-label="Switch to light mode">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
     </div>
+  </nav>
+</header>
+<main>
+<div class="sky" aria-hidden="true"><canvas class="sky-gl"></canvas><canvas class="sky-fx"></canvas></div>
+<section class="show" id="show" aria-roledescription="carousel" aria-label="Fireside meetups">
+  <div class="slides" id="slides">
+    <div class="slide tag-slide" role="group" aria-roledescription="slide"><h1 class="tagline">We meet in Portland to share projects, stories, and ideas around creative technology.</h1></div>
+  </div>
+  <div class="dots" id="dots" aria-label="Choose a slide"></div>
+</section>
+<template id="ev-tpl"><div class="slide banner ev-slide" role="group" aria-roledescription="slide">
+  <div class="lead">
+    <div class="lead-top"><p class="label ev-label"></p><h2 class="title ev-title"></h2></div>
+    <div class="lead-bottom"><p class="line ev-line"></p><a class="cta ev-cta" href="#details"><span></span><i aria-hidden="true"></i></a></div>
+  </div>
+  <div class="stage" aria-hidden="true"><div class="ds"><span class="ds-mon"></span><span class="ds-day"></span><span class="ds-wk"><span class="long"></span><span class="short"></span></span></div></div>
+</div></template>
+<section class="strip" aria-labelledby="strip-title">
+  <div class="strip-bar"><h2 class="label" id="strip-title">Meetups</h2><a class="side-link" href="https://luma.com/FiresideCreativeTech" target="_blank" rel="noopener">Follow on Luma ↗</a></div>
+  <div class="rowwrap">
+    <ol class="dayrow" id="dayrow" aria-label="Upcoming days"></ol>
+    <button class="rowarrow prev" type="button" aria-label="Earlier days" hidden><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2.5 4.5 7 9 11.5"/></svg></button>
+    <button class="rowarrow next" type="button" aria-label="Later days" hidden><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5 9.5 7 5 11.5"/></svg></button>
+  </div>
+  <p class="strip-status" id="strip-status" role="status"></p>
+</section>
+<section class="stack promo" aria-labelledby="p-title">
+  <a class="promo-media" href="gear/" tabindex="-1" aria-hidden="true"><img style="--avg-day:#5c6064;--avg-night:#2c3132;background-color:var(--avg)" class="promo-img" data-day="assets/gear/back-wide-day.webp" data-night="assets/gear/back-wide-night.webp" alt="The bottom of the Chain Reaction design and fireside.technology on the back of the tee" width="1122" height="311" loading="lazy" decoding="async"><noscript><img style="background-color:#2c3132" class="promo-img" src="assets/gear/back-wide-night.webp" alt="The bottom of the Chain Reaction design and fireside.technology on the back of the tee" width="1122" height="311" loading="lazy" decoding="async"></noscript></a>
+  <div class="promo-text"><h2 class="h2" id="p-title">Chain Reaction</h2><p class="sub">Glints of light ripple across the back of our Softwear / EOY 2026 tee.</p><a class="promo-link" href="gear/">See the tee</a></div>
+</section>
+<section class="stack" id="details" aria-labelledby="d-title" hidden>
+  <div class="stack-head">
+    <p class="label">Next meetup</p><h2 class="h2" id="d-title"></h2>
+    <dl class="details" id="d-list"></dl>
+    <div class="action"><a class="buy" id="d-rsvp" href="https://luma.com/FiresideCreativeTech" target="_blank" rel="noopener"><span>RSVP on Luma</span><span aria-hidden="true">↗</span></a></div>
+  </div>
+  <a class="stack-media" id="d-media" href="https://luma.com/FiresideCreativeTech" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true"><img style="background-color:#10161e" class="d-img" data-for="2026-12-17" src="assets/meetups/year-end.webp" alt="Concentric rings of starlight spiraling across a dark night sky" width="1400" height="839" loading="lazy" decoding="async" hidden><div class="placeholder"></div></a>
+</section>
 
-    <div id="ui-layer">
-        <div id="center-links">
-            <a href="#" id="info-btn" class="social-link" data-tooltip="About Fireside">
-                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-            </a>
-            
-            <a href="#" id="event-btn" class="social-link" data-tooltip="Upcoming Event Details">
-                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                </svg>
-            </a>
-            
-            <a href="#" id="theme-btn" class="social-link" data-tooltip="Toggle Vision Mode">
-                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-            </a>
-            
-            <a href="https://instagram.com/fireside.spark" target="_blank" class="social-link" data-tooltip="Follow Us On Instagram">
-                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                </svg>
-            </a>
-            <a href="https://patreon.com/FiresideCreativeTechnology" target="_blank" class="social-link" data-tooltip="Become A Patron">
-                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="16" cy="10" r="6"></circle>
-                    <rect x="3" y="4" width="5" height="16" rx="2.5"></rect>
-                </svg>
-            </a>
-        </div>
-    </div>
-
-    <div id="info-modal" class="modal">
-        <div class="modal-logo top"></div>
-
-        <div class="modal-content">
-            <p id="glitch-text" data-text="Fireside is a Portland-based creative technology community bringing together artists, designers, technologists, and innovators to explore what’s next at the intersection of creativity and emerging tools. Through meetups, presentations, collaborations, and community programming, Fireside creates space to share ideas, showcase work, and connect people shaping the future of creative technology."></p>
-        </div>
-        
-        <div class="modal-logo bottom"></div>
-    </div>
-    
-    <div id="event-modal" class="modal">
-        <div class="modal-logo top"></div>
-
-        <div class="modal-content modal-content-event" id="event-modal-content">
-        </div>
-        
-        <div class="modal-logo bottom"></div>
-    </div>
-
-    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-    <script type="module" src="script.js"></script>
+</main>
+<footer class="foot"><p>Fireside Creative Technology · <span class="year">2026</span></p></footer>
 </body>
 </html>
