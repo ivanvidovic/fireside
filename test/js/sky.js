@@ -38,7 +38,7 @@ function size(){
   const s=small()?.4:.6,fw=Math.round(W*dpr),fh=Math.round(H*dpr),gw=Math.max(1,Math.round(W*s)),gh=Math.max(1,Math.round(H*s));
   let wiped=false;
   if(fx.width!==fw||fx.height!==fh){fx.width=fxF.width=fw;fx.height=fxF.height=fh;wiped=true;}
-  fxF.style.height=h+'px';
+  fxF.style.height=h+'px';fxF.style.clipPath=`inset(0 0 ${h-strip.offsetTop}px 0)`;   // the front embers stop at the calendar strip: they pass behind its glass
   if(glCanvas.width!==gw||glCanvas.height!==gh){glCanvas.width=gw;glCanvas.height=gh;wiped=true;}
   if(gl){gl.viewport(0,0,glCanvas.width,glCanvas.height);fluidSize();}
   place(true);dirty=true;

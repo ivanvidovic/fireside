@@ -217,13 +217,61 @@ html.interacted .hint{opacity:0}
 .stack-media{margin:0;position:relative;min-height:320px;display:flex;flex-direction:column}
 #d-media{overflow:hidden;background:color-mix(in srgb,var(--ink) 6%,transparent)}
 #d-media .d-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 36%;flex:none;aspect-ratio:auto}   /* cropped to fit, never stretched */
-#d-media .d-img[hidden],#d-media .placeholder[hidden]{display:none}
+#d-media .d-img[hidden]{display:none}
 .stack-media img{flex:1 1 0;min-height:0;display:block;width:100%;height:auto;object-fit:cover;object-position:50% 35%}
 .stack-media.mockup img{background:#191919;object-position:50% 50%}
-/* Placeholder until events have images: ripples, in the spirit of Chain Reaction. */
-.placeholder{position:absolute;inset:0;
-  background:repeating-radial-gradient(circle at 50% 55%,color-mix(in srgb,var(--accent) 22%,transparent) 0 1px,transparent 1px 22px),
-             radial-gradient(circle at 50% 55%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 70%)}
+/* Placeholder when the next meetup has no image (js/meetups.js): the glitch, and over it a glass panel inset 16px
+   with the date cut out of it */
+#d-media .ph-sig{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+#d-media:has(.ph-glass){perspective:900px;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+#d-media .ph-card{position:absolute;inset:16px;transform-style:preserve-3d;will-change:transform}
+/* the card's side: slices behind the glass, a little lighter than the glass, catching a trace of the edge light */
+#d-media .ph-slab{position:absolute;inset:0;border-radius:28px;pointer-events:none;
+  background:color-mix(in srgb,var(--bg) 70%,var(--ink) 30%);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-mode:alpha;mask-mode:alpha}
+#d-media .ph-glass{position:absolute;inset:0;border-radius:28px;
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-mode:alpha;mask-mode:alpha}
+/* Holographic light on the glass, like the foil on a collectible card. The colours come from --hue, which shifts as the
+   card moves (js/meetups.js); --ang is the side the light comes from. The edges facing the pointer catch a thin
+   coloured glint that fades around the panel, the cut-out numbers' edges catch the same, and a soft band of spectral
+   colour slides over the surface under the pointer. All of it grows with the tilt and fades as the panel settles. */
+#d-media .ph-glass{--hue:200deg;
+  --lit:conic-gradient(from var(--ang,0deg),rgba(255,255,255,.95),hsl(var(--hue) 60% 90% / .8) 14deg,hsl(calc(var(--hue) + 50deg) 100% 74% / .5) 38deg,
+    hsl(calc(var(--hue) + 110deg) 90% 72% / .1) 90deg,transparent 150deg 210deg,hsl(calc(var(--hue) - 110deg) 90% 72% / .1) 270deg,
+    hsl(calc(var(--hue) - 50deg) 100% 74% / .5) 322deg,hsl(var(--hue) 60% 90% / .8) 346deg,rgba(255,255,255,.95));
+  --foil:linear-gradient(calc(var(--ang,0deg) + 90deg),hsl(var(--hue) 100% 70%),hsl(calc(var(--hue) + 60deg) 100% 68%) 25%,hsl(calc(var(--hue) + 120deg) 100% 70%) 50%,
+    hsl(calc(var(--hue) + 180deg) 100% 68%) 75%,hsl(calc(var(--hue) + 240deg) 100% 70%));--foil-o:.5;--foil-blend:screen}
+[data-scheme=light] #d-media .ph-glass{--foil-o:.6;--foil-blend:soft-light;--glare-o:.4}
+/* the glare: a soft, feathered streak of light that slides across as the card leans */
+#d-media .ph-glare{position:absolute;inset:0;pointer-events:none;opacity:calc(var(--hl,0) * var(--glare-o,.28));mix-blend-mode:screen;
+  background:linear-gradient(115deg,transparent calc(var(--gx,50%) - 45%),rgba(255,255,255,.05) calc(var(--gx,50%) - 32%),rgba(255,255,255,.14) calc(var(--gx,50%) - 18%),
+    rgba(255,255,255,.24) calc(var(--gx,50%) - 6%),rgba(255,255,255,.28) var(--gx,50%),rgba(255,255,255,.24) calc(var(--gx,50%) + 6%),
+    rgba(255,255,255,.14) calc(var(--gx,50%) + 18%),rgba(255,255,255,.05) calc(var(--gx,50%) + 32%),transparent calc(var(--gx,50%) + 45%))}
+/* the hidden watermark (js/meetups.js): only where the pointer shines, in the foil's colour */
+#d-media .ph-glass{overflow:hidden}
+#d-media .ph-frost{position:absolute;pointer-events:none}
+#d-media .ph-cd{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;opacity:.75}
+[data-scheme=light] #d-media .ph-cd{mix-blend-mode:plus-lighter;opacity:.7}   /* added as light, like the dark theme */
+#d-media .ph-tint{position:absolute;inset:0;pointer-events:none;background:color-mix(in srgb,var(--bg) 62%,transparent)}
+#d-media .ph-mark{position:absolute;inset:0;pointer-events:none;opacity:calc(var(--hl,0) * var(--mark-o,.55));mix-blend-mode:screen;
+  -webkit-mask-image:radial-gradient(ellipse 30% 46% at var(--hx,50%) var(--hy,50%),#000,rgba(0,0,0,.6) 40%,rgba(0,0,0,.2) 70%,transparent);
+  mask-image:radial-gradient(ellipse 30% 46% at var(--hx,50%) var(--hy,50%),#000,rgba(0,0,0,.6) 40%,rgba(0,0,0,.2) 70%,transparent)}
+#d-media .ph-mark i{position:absolute;inset:-60%;transform:rotate(-33deg);opacity:var(--mk,1);
+  background:linear-gradient(calc(var(--ang,0deg) - 90deg),hsl(var(--mhue,0deg) 100% 70%),hsl(calc(var(--mhue,0deg) - 70deg) 100% 68%) 33%,
+    hsl(calc(var(--mhue,0deg) - 140deg) 100% 70%) 66%,hsl(calc(var(--mhue,0deg) - 210deg) 100% 68%));-webkit-mask-repeat:repeat;mask-repeat:repeat}
+[data-scheme=light] #d-media .ph-mark{mix-blend-mode:multiply;--mark-o:.6}
+#d-media .ph-edge{position:absolute;inset:0;pointer-events:none;opacity:calc(var(--el,0) * .75);   /* the letters' edges: 75% of the card's */background:var(--lit);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-mode:alpha;mask-mode:alpha}
+#d-media .ph-glass::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:.75px;pointer-events:none;opacity:var(--el,0);background:var(--lit);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+/* the edge's soft glow, running 18px inward and falling off fast then gently: the edge reads as slightly rounded */
+#d-media .ph-rim{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:calc(var(--el,0) * .3);background:var(--lit);
+  -webkit-mask:linear-gradient(to right,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px),linear-gradient(to left,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px),linear-gradient(to bottom,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px),linear-gradient(to top,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px);
+  mask:linear-gradient(to right,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px),linear-gradient(to left,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px),linear-gradient(to bottom,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px),linear-gradient(to top,#000,rgba(0,0,0,.55) 2px,rgba(0,0,0,.3) 4px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.07) 11px,rgba(0,0,0,.02) 15px,transparent 18px)}
+#d-media .ph-glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:calc(var(--hl,0) * var(--foil-o));mix-blend-mode:var(--foil-blend);
+  background:var(--foil);
+  -webkit-mask-image:radial-gradient(ellipse 110% 130% at var(--hx,50%) var(--hy,50%),#000,rgba(0,0,0,.75) 12%,rgba(0,0,0,.45) 28%,rgba(0,0,0,.22) 45%,rgba(0,0,0,.07) 62%,transparent 80%);
+  mask-image:radial-gradient(ellipse 110% 130% at var(--hx,50%) var(--hy,50%),#000,rgba(0,0,0,.75) 12%,rgba(0,0,0,.45) 28%,rgba(0,0,0,.22) 45%,rgba(0,0,0,.07) 62%,transparent 80%)}
 .h2{font-size:clamp(36px,3.6vw,56px);font-weight:600;line-height:1;letter-spacing:-.03em;text-box:trim-both cap alphabetic}
 .spec-big{margin-top:20px;font-size:1.3rem;font-weight:600;letter-spacing:-.01em}
 .spec-big .price{font:400 1.9rem/1 var(--pixel);letter-spacing:0}
@@ -292,6 +340,8 @@ img[data-day]{--avg:var(--avg-night)}
 html:not(.js) img[data-day]{display:none}
 img.rv-wait{object-position:-200vw 0!important}
 .rv-canvas{position:absolute;pointer-events:none}
+.rv-over{z-index:5}
+.rv-hold>*{visibility:hidden}   /* a drawn panel waits, hidden, for its load-in (js/reveal.js) */
 .rv-glitch{image-rendering:pixelated}
 img.rv-fade{animation:rv-fade .4s ease both}
 @keyframes rv-fade{from{opacity:0}}
