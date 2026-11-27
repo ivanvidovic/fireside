@@ -1,0 +1,35 @@
+{
+ "updatedAt": "2026-11-25T00:00:00Z",
+ "sample": true,
+ "events": [
+  {
+   "date": "2026-12-18T02:00:00Z",
+   "end": "2026-12-18T05:00:00Z",
+   "url": "https://luma.com/FiresideCreativeTech",
+   "title": "Year-End Party + Tee Pickup",
+   "location": "West Coast AI Labs, 431 NW Flanders St #303, Portland, OR 97209, USA",
+   "host": "Terence Brasch",
+   "venue": "West Coast AI Labs",
+   "note": "Someone at the door will let you in, or ring unit 303 on the call box at the entrance and we’ll buzz you in."
+  },
+  {
+   "date": "2027-01-29T02:00:00Z",
+   "end": "2027-01-29T05:00:00Z",
+   "url": "https://luma.com/FiresideCreativeTech",
+   "title": "Fireside Meetup: January",
+   "location": "West Coast AI Labs, 431 NW Flanders St #303, Portland, OR 97209, USA",
+   "host": "Terence Brasch",
+   "venue": "West Coast AI Labs",
+   "note": "Someone at the door will let you in, or ring unit 303 on the call box at the entrance and we’ll buzz you in."
+  },
+  {
+   "date": "2027-02",
+   "url": "https://luma.com/FiresideCreativeTech",
+   "title": "Fireside Meetup: February",
+   "location": "West Coast AI Labs, 431 NW Flanders St #303, Portland, OR 97209, USA",
+   "host": "Terence Brasch",
+   "venue": "West Coast AI Labs",
+   "note": "Someone at the door will let you in, or ring unit 303 on the call box at the entrance and we’ll buzz you in."
+  }
+ ]
+}

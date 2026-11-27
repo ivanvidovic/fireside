@@ -1,0 +1,46 @@
+# Daily backup of Fireside's Luma calendar for fireside.technology.
+# The site reads live events from the Cloudflare Worker; if that ever fails it falls back to
+# data/meetups.json. This keeps that file fresh: once a day (and on demand from the Actions tab)
+# it refreshes the file from Luma and commits it only when the events changed.
+name: Meetups backup
+on:
+  schedule:
+    - cron: '17 13 * * *'   # daily, 5:17 am Pacific
+  workflow_dispatch:        # "Run workflow" button
+permissions:
+  contents: write           # commit the refreshed file
+  pages: write              # ask GitHub Pages to rebuild after the commit
+concurrency:
+  group: meetups-backup
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Refresh snapshot from Luma
+        run: |
+          cp data/meetups.json "$RUNNER_TEMP/old.json" 2>/dev/null || echo '{"events":[]}' > "$RUNNER_TEMP/old.json"
+          node scripts/refresh-meetups.mjs data/meetups.json
+      - name: Commit if the events changed
+        id: commit
+        run: |
+          if node -e "const fs=require('fs'),f=p=>{try{return JSON.stringify(JSON.parse(fs.readFileSync(p,'utf8')).events||[])}catch{return ''}};process.exit(f(process.argv[1])===f('data/meetups.json')?0:1)" "$RUNNER_TEMP/old.json"; then
+            echo "No event changes; nothing to commit."
+            git checkout -- data/meetups.json
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/meetups.json
+          git commit -m "Refresh meetups backup from Luma"
+          git push
+          echo "pushed=1" >> "$GITHUB_OUTPUT"
+      - name: Rebuild GitHub Pages
+        if: steps.commit.outputs.pushed == '1'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds"
