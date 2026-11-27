@@ -146,7 +146,9 @@ function installSizeMagic(form){
   const UP=240,SIDE=170,DOWN=90;   // room round the slider for the sparks to burst and rise into
   function place(){
     const r=el.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1),was=box;
-    box={left:r.left+scrollX-SIDE,top:r.top+scrollY-UP,w:r.width+SIDE*2,h:UP+r.height+DOWN,dpr};
+    // kept inside the page's width: a canvas poking past the edge would widen the page (phones then zoom out)
+    const vw=document.documentElement.clientWidth,x0=Math.max(0,r.left-SIDE),x1=Math.min(vw,r.right+SIDE);
+    box={left:x0+scrollX,top:r.top+scrollY-UP,w:x1-x0,h:UP+r.height+DOWN,dpr};
     Object.assign(cv.style,{left:box.left+'px',top:box.top+'px',width:box.w+'px',height:box.h+'px'});
     cv.width=Math.round(box.w*dpr);cv.height=Math.round(box.h*dpr);
     if(was)for(const e of sparks){e.x+=was.left-box.left;e.y+=was.top-box.top;}   // sparks in the air keep their place on the page
