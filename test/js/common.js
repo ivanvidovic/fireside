@@ -95,11 +95,45 @@ for(const el of document.querySelectorAll('.year'))el.textContent=new Date().get
 /* ---------------- contact ---------------- */
 // Every "Contact Us" link (a.contact) shares this. The address is kept in two parts and only
 // joined when a link is activated, so it never appears whole in the HTML or the shipped JS.
+// A click opens the email app and copies the address. If no app opens (the page keeps focus),
+// a small menu offers webmail compose windows; the address is never shown on the page.
 const CONTACT={user:'fireside',domain:['friendsof','world']};
+const address=()=>CONTACT.user+String.fromCharCode(64)+CONTACT.domain.join('.');
+const copy=t=>navigator.clipboard?.writeText(t).catch(()=>{});
+const WEBMAIL=[['Gmail','https://mail.google.com/mail/?view=cm&fs=1&to='],['Outlook','https://outlook.live.com/mail/0/deeplink/compose?to='],['Yahoo','https://compose.mail.yahoo.com/?to=']];
+let menu=null,menuFor=null;
+function closeMenu(refocus){if(!menu)return;menu.remove();menu=null;if(refocus)menuFor?.focus();menuFor=null;}
+function openMenu(a){
+  closeMenu();menuFor=a;menu=document.createElement('span');
+  menu.className='contact-menu';menu.setAttribute('role','group');menu.setAttribute('aria-label','Email options');
+  for(const [name,url] of WEBMAIL){
+    const b=document.createElement('button');b.type='button';b.textContent=name;
+    b.onclick=()=>{window.open(url+encodeURIComponent(address()),'_blank','noopener');closeMenu();};menu.append(b);
+  }
+  const c=document.createElement('button');c.type='button';c.textContent='Copy address';
+  c.onclick=()=>{copy(address());c.textContent='Copied';setTimeout(()=>closeMenu(true),1200);};menu.append(c);
+  document.body.append(menu);
+  const r=a.getBoundingClientRect(),m=menu.getBoundingClientRect(),pad=8;
+  const x=Math.max(pad,Math.min(innerWidth-m.width-pad,r.left+r.width/2-m.width/2));
+  const y=r.top-m.height-8>pad?r.top-m.height-8:r.bottom+8;
+  menu.style.left=x+'px';menu.style.top=y+'px';
+  menu.querySelector('button').focus({preventScroll:true});
+}
 document.addEventListener('click',e=>{
-  const a=e.target.closest?.('a.contact');if(!a)return;
-  e.preventDefault();
-  location.href='mailto:'+CONTACT.user+String.fromCharCode(64)+CONTACT.domain.join('.');
+  const a=e.target.closest?.('a.contact');
+  if(!a){if(menu&&!menu.contains(e.target))closeMenu();return;}
+  e.preventDefault();closeMenu();
+  const to=address();copy(to);
+  let left=false;const away=()=>{left=true;};
+  addEventListener('blur',away);document.addEventListener('visibilitychange',away);
+  location.href='mailto:'+to;
+  setTimeout(()=>{
+    removeEventListener('blur',away);document.removeEventListener('visibilitychange',away);
+    if(!left&&document.hasFocus())openMenu(a);
+  },1000);
 });
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu(true);});
+addEventListener('scroll',()=>closeMenu(),{passive:true});
+addEventListener('resize',()=>closeMenu());
 
 import './reveal.js';
