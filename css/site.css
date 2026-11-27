@@ -406,6 +406,7 @@ html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:
   .stack-media{min-height:0}
   .stack-media img{flex:none;aspect-ratio:4/3}
   #d-media{order:-1;aspect-ratio:3/1}
+  #details{padding-top:24px}   /* phones: same space under the divider as the strip and the Chain Reaction ad above */
   .gallery{grid-template-columns:1fr}
   .details div{grid-template-columns:minmax(0,1fr);gap:4px}
 }
