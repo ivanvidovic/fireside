@@ -153,6 +153,14 @@ html.interacted .hint{opacity:0}
 .sky-front{position:absolute;z-index:2;top:0;left:0;width:100%;pointer-events:none;opacity:0;transition:opacity .6s var(--ease);
   -webkit-mask-image:linear-gradient(#000 calc(100% - 160px),transparent);mask-image:linear-gradient(#000 calc(100% - 160px),transparent)}
 .sky.ready+.sky-front{opacity:1}
+.sky-front canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* Depth (js/sky.js sets each layer's --depth and the sky's height as --sky-range): the browser itself moves each layer
+   as the page scrolls, in step with the scrolling, so it stays smooth on phones. Without support it simply doesn't run,
+   and js/sky.js shifts the drawing instead. */
+@keyframes sky-depth{to{translate:0 calc(var(--sky-range,1000px) * var(--depth,0))}}
+@supports (animation-timeline:scroll()){
+  .sky-layer{animation:sky-depth linear both;animation-timeline:scroll(root block);animation-range:0px var(--sky-range,1000px)}
+}
 .slides{display:flex;align-items:flex-start;transition:transform .7s var(--ease);touch-action:pan-y}
 .slide{flex:0 0 100%;min-width:0}
 .show .banner{padding-top:56px;padding-bottom:88px}

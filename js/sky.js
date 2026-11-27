@@ -20,13 +20,26 @@ const ease=x=>x*x*(3-2*x);
 const isDark=()=>root.dataset.scheme!=='light';
 
 const glCanvas=sky.querySelector('.sky-gl'),fx=sky.querySelector('.sky-fx'),g=fx.getContext('2d');
-// a few embers fly in front of the banner text: their own canvas, over the sky's area, above the text (clicks pass through)
-const fxF=document.createElement('canvas');fxF.className='sky-front';fxF.setAttribute('aria-hidden','true');sky.after(fxF);
+// the stars (and shooting stars) on their own layer, between the sky and the fire
+const starCv=document.createElement('canvas');starCv.className='sky-stars';glCanvas.after(starCv);
+const gs=starCv.getContext('2d');
+// a few embers fly in front of the banner text: their own layer, over the sky's area, above the text (clicks pass through)
+const frontWrap=document.createElement('div');frontWrap.className='sky-front';frontWrap.setAttribute('aria-hidden','true');sky.after(frontWrap);
+const fxF=document.createElement('canvas');frontWrap.append(fxF);
 const gF=fxF.getContext('2d');
 let W=0,H=0,dpr=1,t=0,K=10;               // K: pixels per degree of sky
 let tod=isDark()?1:0,target=tod;
-const PAR={stars:.8,fire:.15,far:.6,near:.35,front:-.35};   // front: the embers before the text outrun the page   // how much each layer lags the page when scrolling (1 = fixed in place)
+// Depth: how much each layer lags the page when scrolling (1 = fixed in place; negative = outruns the page, in front).
+const PAR={stars:.6,fire:.35,far:.55,near:.45,front:-.3},GL_DEPTH=.5;
+// Where the browser supports scroll-linked animation, it moves the layers itself (css/site.css: .sky-layer), in step
+// with the page, so nothing waits on this script and phones scroll smoothly; the drawing then needs no scroll shift.
+// Elsewhere this script shifts what it draws, as before. Reduced motion: no depth at all.
+const CSSPAR=!reduced&&CSS.supports('animation-timeline','scroll()');
 let scrolled=0;
+const vis=k=>reduced?0:scrolled*PAR[k];                      // where a layer appears, relative to the page
+const shift=k=>CSSPAR||reduced?0:scrolled*PAR[k];            // what the drawing itself must shift
+const glShift=k=>reduced?0:scrolled*(PAR[k]-(CSSPAR?GL_DEPTH:0));   // the sky shader's layers, relative to its canvas
+for(const [el,d] of [[glCanvas,GL_DEPTH],[starCv,PAR.stars],[fx,PAR.fire],[fxF,PAR.front]]){el.classList.add('sky-layer');el.style.setProperty('--depth',d);}
 
 /* ---------------- size ---------------- */
 function size(){
@@ -38,8 +51,9 @@ function size(){
   // they change, and the sky is redrawn straight away, before the browser shows the wiped canvas.
   const s=small()?.4:.6,fw=Math.round(W*dpr),fh=Math.round(H*dpr),gw=Math.max(1,Math.round(W*s)),gh=Math.max(1,Math.round(H*s));
   let wiped=false;
-  if(fx.width!==fw||fx.height!==fh){fx.width=fxF.width=fw;fx.height=fxF.height=fh;wiped=true;}
-  fxF.style.height=h+'px';fxF.style.clipPath=`inset(0 0 ${h-strip.offsetTop}px 0)`;   // the front embers stop at the calendar strip: they pass behind its glass
+  if(fx.width!==fw||fx.height!==fh){fx.width=fxF.width=starCv.width=fw;fx.height=fxF.height=starCv.height=fh;wiped=true;}
+  sky.style.setProperty('--sky-range',h+'px');frontWrap.style.setProperty('--sky-range',h+'px');
+  frontWrap.style.height=h+'px';frontWrap.style.clipPath=`inset(0 0 ${h-strip.offsetTop}px 0)`;   // the front embers stop at the calendar strip: they pass behind its glass
   if(glCanvas.width!==gw||glCanvas.height!==gh){glCanvas.width=gw;glCanvas.height=gh;wiped=true;}
   if(gl){gl.viewport(0,0,glCanvas.width,glCanvas.height);fluidSize();}
   place(true);dirty=true;
@@ -89,8 +103,8 @@ function skyB(x,y){
 const limMag=B=>6.4-2.5*Math.log10(1+B*14500);
 function drawStars(dt){
   if(ease(tod)<.3)return;
-  const off=scrolled*PAR.stars,lim0=limMag(skyB(-1e5,-1e5)),night=smooth(.3,.6,ease(tod));
-  g.save();g.translate(0,off);
+  const off=shift('stars'),lim0=limMag(skyB(-1e5,-1e5)),night=smooth(.3,.6,ease(tod));
+  const g=gs;g.save();g.translate(0,off);
   // the faint ones only show on a properly dark sky
   const fa=smooth(5.2,6.6,lim0);if(fa>0){g.globalAlpha=fa;g.drawImage(faintLayer,0,0,W,H);g.globalAlpha=1;}
   for(const p of starPts){
@@ -121,7 +135,7 @@ function launch(x,y,ang,speed,len,bright){
 }
 function randomLaunch(x,y){   // a click or tap: any direction, but heading away from the nearest edge
   const ex=x<W/2?1:-1,ey=y<H/2?.6:-.6;let ang=Math.atan2(ey+rnd(-.9,.9),ex*rnd(.3,1.2));
-  launch(x,y-scrolled*PAR.stars,ang,rnd(420,1300),rnd(50,260),rnd(.6,1));
+  launch(x,y-vis('stars'),ang,rnd(420,1300),rnd(50,260),rnd(.6,1));
 }
 function stepMeteors(dt){
   const night=smooth(.7,1,ease(tod));
@@ -138,7 +152,7 @@ function stepMeteors(dt){
       launch(x,y,ang,rnd(500,1100),rnd(60,220)*(Math.random()<.1?1.8:1),rnd(.5,1));
     }
   }
-  g.save();g.translate(0,scrolled*PAR.stars);g.lineCap='round';
+  const g=gs;g.save();g.translate(0,shift('stars'));g.lineCap='round';
   for(let i=meteors.length-1;i>=0;i--){
     const m=meteors[i];m.age+=dt;const a=m.age/m.life;
     if(a>=1.6){meteors.splice(i,1);continue;}
@@ -298,7 +312,7 @@ function stepEmbers(dt){
   const want=(small()?40:85)*night;
   if(!reduced&&want>1){spawnAcc+=dt*want/5;while(spawnAcc>=1){spawnAcc--;embers.push(newEmber(false));}}
   // scrolling: the embers behind lag the page (further away); the ones in front outrun it (closer)
-  const off=scrolled*PAR.fire,offF=scrolled*PAR.front,keep=[];
+  const off=vis('fire'),offF=vis('front'),keep=[];   // where they appear (for the air and the text)
   for(const e of embers){
     e.age+=dt;e.T-=dt/e.life;if(e.T<=0||e.y+(e.front?offF:0)<-40)continue;
     const a=air(e.x,e.y+(e.front?offF:off)),carry=1.45-e.size*.22;
@@ -311,7 +325,7 @@ function stepEmbers(dt){
   }
   embers=keep;
   const text=night>.01&&embers.some(e=>e.front)?textRects():[];
-  for(const [c,o] of [[g,off],[gF,offF]]){c.save();c.translate(0,o);c.globalCompositeOperation='lighter';c.lineCap='round';}
+  for(const [c,o] of [[g,shift('fire')],[gF,shift('front')]]){c.save();c.translate(0,o);c.globalCompositeOperation='lighter';c.lineCap='round';}
   for(const e of embers){
     const c=e.front?gF:g,o=e.front?offF:off;
     const fl=.72+.28*(.5+.5*Math.sin(t*e.f1+e.seed))*(.5+.5*Math.sin(t*e.f2+e.seed*2));
@@ -419,7 +433,7 @@ function pass(prog,dst,set){
 let lastEdgeOn=false,energy=0,slideBreeze=null;
 function stepClouds(dt){
   if(!FL||!FL.vel||tod>.9)return;
-  const {P,vel,prs,div,map}=FL,sw=vel.r.w,sh=vel.r.h,off=scrolled*PAR.near,texel=[1/sw,1/sh];
+  const {P,vel,prs,div,map}=FL,sw=vel.r.w,sh=vel.r.h,off=vis('near'),texel=[1/sw,1/sh];
   const forces=[];
   // the cursor's gust: only fast movement, in its direction (cells/s), centred where it is on the near layer
   const sp=Math.hypot(ptr.vx,ptr.vy);
@@ -551,7 +565,7 @@ function drawSkyGL(fireGlow){
   gl.uniform2f(U.uRes,glCanvas.width,glCanvas.height);gl.uniform2f(U.uCss,W,H);
   gl.uniform1f(U.uT,reduced?40:t);gl.uniform1f(U.uTod,ease(tod));gl.uniform1f(U.uGlow,fireGlow);
   gl.uniform1f(U.uK,K/DEG);gl.uniform1f(U.uLat,LAT);gl.uniform1f(U.uLst,L);
-  gl.uniform1f(U.uStarOff,scrolled*PAR.stars);gl.uniform1f(U.uFireOff,scrolled*PAR.fire);gl.uniform1f(U.uFarOff,scrolled*PAR.far);gl.uniform1f(U.uNearOff,scrolled*PAR.near);
+  gl.uniform1f(U.uStarOff,glShift('stars'));gl.uniform1f(U.uFireOff,glShift('fire'));gl.uniform1f(U.uFarOff,glShift('far'));gl.uniform1f(U.uNearOff,glShift('near'));
   gl.drawArrays(gl.TRIANGLES,0,3);
 }
 
@@ -584,7 +598,7 @@ function frame(now){
   stepEdge(dt);place(false);inks();stepClouds(dt);cloudPuffs=[];   // (at night there's no cloud air to push)
   const fireGlow=(reduced?1:.82+.1*Math.sin(t*1.7)+.06*Math.sin(t*4.3+1.3)+.04*Math.sin(t*9.1))*(1+.55*glowBoost);
   drawSkyGL(fireGlow);
-  g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);gF.setTransform(dpr,0,0,dpr,0,0);gF.clearRect(0,0,W,H);
+  g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);gs.setTransform(dpr,0,0,dpr,0,0);gs.clearRect(0,0,W,H);gF.setTransform(dpr,0,0,dpr,0,0);gF.clearRect(0,0,W,H);
   drawStars(dt);stepMeteors(dt);stepEmbers(dt);
   if(!drawn&&(catalog||t>1.5)){drawn=true;sky.classList.add('ready');}
   dirty=false;wake();
