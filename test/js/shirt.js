@@ -91,13 +91,15 @@ vec3 kFabricColor=vec3(0.0),kEffectNormal=vec3(0.0);
 varying vec2 vArtworkUv;
 varying vec4 vArtworkClamp;
 bool insideArtworkTile(){return all(greaterThanEqual(vArtworkUv,vArtworkClamp.xy))&&all(lessThanEqual(vArtworkUv,vArtworkClamp.zw))&&vArtworkClamp.z>vArtworkClamp.x;}
-vec2 boundedArtworkUv(){return clamp(vArtworkUv,vArtworkClamp.xy,vArtworkClamp.zw);}
 float kArtworkMask=0.0;`;
 const FRAG_PRINT=`{
 kArtworkMask=0.0;kFabricColor=diffuseColor.rgb;
 #ifdef ORB_ARTWORK
+// Sample in uniform control flow with the raw UV: a read inside the per-pixel tile test
+// gets undefined derivatives on the tile edge, and mobile GPUs then pick a tiny mip and
+// draw a shimmering bright outline. The atlas gutters are transparent, so no clamp is needed.
+vec4 art=texture2D(uArtwork,vArtworkUv);
 if(gl_FrontFacing&&uHasArtwork>0.5&&insideArtworkTile()){
-  vec4 art=texture2D(uArtwork,boundedArtworkUv());
   diffuseColor.rgb=diffuseColor.rgb*(1.0-art.a)+art.rgb;
   kArtworkMask=art.a;
 }

@@ -92,4 +92,14 @@ document.fonts?.ready.then(shapeAll);   // the label's width settles once the fo
 /* ---------------- footer year ---------------- */
 for(const el of document.querySelectorAll('.year'))el.textContent=new Date().getFullYear();
 
+/* ---------------- contact ---------------- */
+// Every "Contact Us" link (a.contact) shares this. The address is kept in two parts and only
+// joined when a link is activated, so it never appears whole in the HTML or the shipped JS.
+const CONTACT={user:'fireside',domain:['friendsof','world']};
+document.addEventListener('click',e=>{
+  const a=e.target.closest?.('a.contact');if(!a)return;
+  e.preventDefault();
+  location.href='mailto:'+CONTACT.user+String.fromCharCode(64)+CONTACT.domain.join('.');
+});
+
 import './reveal.js';

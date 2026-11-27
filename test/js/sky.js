@@ -82,16 +82,19 @@ function place(force){
   const sn=sun(now),[sAlt,sAz]=horiz(sn.ra,sn.dec,L);
   // which way its lit side faces on screen: toward the Sun along the sky
   const dir=(a1,z1,a2,z2)=>{const p=toScreen(a1,z1),q=toScreen(a1+(a2-a1)*.01,z1+(((z2-z1+3*Math.PI)%(2*Math.PI))-Math.PI)*.01);return Math.atan2(q[1]-p[1],q[0]-p[0]);};
-  moonPt={xy:toScreen(alt,az),alt,illum:m.illum,lit:dir(alt,az,sAlt,sAz),up:alt>-.01};
+  // which way its north points on screen (its face is set by the sky's north, as seen from here at this hour)
+  const [nAlt,nAz]=horiz(m.ra,m.dec+.01,L),p0=toScreen(alt,az),p1=toScreen(nAlt-.95*DEG*Math.cos(nAlt),nAz);
+  moonPt={xy:p0,alt,illum:m.illum,lit:dir(alt,az,sAlt,sAz),north:Math.atan2(p1[1]-p0[1],p1[0]-p0[0]),up:alt>-.01};
   moonLight=moonPt.up?m.illum*clamp(Math.sin(alt)*2,0,1):0;   // moonlight fills the whole sky, in view or not
 }
 let moonLight=0;
+const moonR=()=>Math.max(6,.26*K*4);   // drawn at 4× its true size (0.26° radius), so its face and phase read
 // How bright the sky is behind the stars: full daylight 1, a dark night 0, plus moonlight (more near the Moon).
 // A star shows when it's brighter than that: the faintest visible magnitude follows the sky continuously,
 // so at dusk the brightest appear first and every star keeps brightening as the sky darkens.
 function skyB(x,y){
   let B=Math.pow(1-ease(tod),3)+moonLight*.00008;
-  if(moonPt&&moonPt.up){const d=Math.hypot(x-moonPt.xy[0],y-moonPt.xy[1]);B+=moonLight*.004*Math.exp(-d/(Math.max(5,.26*K*3)*8));}
+  if(moonPt&&moonPt.up){const d=Math.hypot(x-moonPt.xy[0],y-moonPt.xy[1]);B+=moonLight*.004*Math.exp(-d/(moonR()*8));}
   return B;
 }
 const limMag=B=>6.4-2.5*Math.log10(1+B*14500);
@@ -122,17 +125,47 @@ function drawStars(dt){
   if(moonPt&&moonPt.up)drawMoon(smooth(.35,.75,ease(tod)));
   g.restore();
 }
+// The Moon, drawn in code: a lit sphere at its real phase, with the near side's dark seas where they really are,
+// light mottling, bright Tycho and Copernicus, soft limbs and terminator, faint earthshine on the unlit part, and a
+// warmer tint low in the sky. Rendered once to a small image and only redrawn when something about it changes.
+const MARIA=[   // selenographic longitude, latitude, radius (degrees), depth
+  [-57,18,24,.5],[-16,33,13,.55],[17,28,9,.55],[31,8,11,.55],[59,17,6,.6],[51,-8,9,.45],[35,-15,5,.45],[-17,-21,9,.45],
+  [-39,-24,5,.45],[-23,-10,6,.4],[-31,7,7,.4],[4,13,4,.4],[-10,56,7,.35],[15,56,6,.35],[-35,52,5,.3]];
+const CRATERS=[[-11,-43,2.2,.55],[-20,10,1.6,.35],[-38,8,1.3,.25]];   // Tycho, Copernicus, Kepler: brighter
+let moonImg=null,moonKey='';
+function moonImage(R,k,lit,north,warm){
+  const key=[R.toFixed(1),k.toFixed(3),lit.toFixed(2),north.toFixed(2),warm.toFixed(2),dpr].join();
+  if(key===moonKey)return moonImg;moonKey=key;
+  const n=Math.ceil((R+1)*2*dpr),c=moonImg||document.createElement('canvas');c.width=c.height=n;
+  const x=c.getContext('2d'),img=x.createImageData(n,n),d=img.data,rr=R*dpr,cx=n/2;
+  const ph=2*k-1,sn=Math.sqrt(Math.max(0,1-ph*ph)),S=[Math.cos(lit)*sn,Math.sin(lit)*sn,ph];   // the Sun, as seen from the Moon
+  const fa=north+Math.PI/2,cf=Math.cos(fa),sf=Math.sin(fa);   // turn the face so its north points along the sky's
+  const base=[246-8*warm,240-22*warm,226-48*warm];
+  for(let py=0;py<n;py++)for(let px=0;px<n;px++){
+    const u=(px+.5-cx)/rr,v=(py+.5-cx)/rr,r2=u*u+v*v;if(r2>1.04)continue;
+    const z=Math.sqrt(Math.max(0,1-r2)),edge=clamp((1.02-Math.sqrt(r2))/.04,0,1);   // a soft rim
+    // selenographic coordinates: north up, east to the right as seen
+    const fu=u*cf+v*sf,fv=-u*sf+v*cf,lat=Math.asin(clamp(-fv,-1,1))/DEG,lon=Math.atan2(fu,z)/DEG;
+    let alb=1;
+    for(const [mx,my,mr,dp] of MARIA){const dl=(lon-mx)*Math.cos(lat*DEG),db=lat-my,q=(dl*dl+db*db)/(mr*mr);if(q<5)alb-=dp*.7*Math.exp(-q*.9);}   // soft-edged seas
+    for(const [mx,my,mr,dp] of CRATERS){const dl=(lon-mx)*Math.cos(lat*DEG),db=lat-my,q=(dl*dl+db*db)/(mr*mr);if(q<9)alb+=dp*Math.exp(-q);}
+    alb+=(Math.sin(lon*.9+lat*1.3)*Math.sin(lat*1.1-lon*.6)+Math.sin(lon*2.3-lat*1.9)*.5)*.035;   // light mottling
+    alb=clamp(alb,.38,1.25);
+    const lam=u*S[0]+v*S[1]+z*S[2],lightK=smooth(-.06,.12,lam)*(.72+.28*Math.sqrt(Math.max(0,lam)));   // soft terminator
+    const limb=.78+.22*z;   // a little darker toward the rim
+    const lum=Math.max(lightK*alb*limb,.055*alb*(1-lightK));   // earthshine on the unlit part
+    const i=(py*n+px)*4,cool=1-lightK;
+    d[i]=clamp(base[0]*lum*(1-.08*cool),0,255);d[i+1]=clamp(base[1]*lum,0,255);d[i+2]=clamp(base[2]*lum*(1+.25*cool),0,255);
+    d[i+3]=255*edge*clamp(lum*4,0,1);
+  }
+  x.putImageData(img,0,0);moonImg=c;return c;
+}
 function drawMoon(night){
-  // drawn at about 3× its true size so the phase reads
-  const [x,y]=moonPt.xy,R=Math.max(5,.26*K*3),k=moonPt.illum,a=night;
+  const [x,y]=moonPt.xy,R=moonR();
   if(x<-R||x>W+R||y<-R)return;
-  g.save();g.translate(x,y);g.rotate(moonPt.lit);
-  g.fillStyle=`rgba(150,160,185,${(.12*a).toFixed(3)})`;g.beginPath();g.arc(0,0,R,0,6.283);g.fill();   // earthshine
-  // lit part: the half facing the Sun, closed by the terminator (an ellipse)
-  g.fillStyle=`rgba(246,242,228,${a.toFixed(3)})`;g.beginPath();
-  g.arc(0,0,R,-Math.PI/2,Math.PI/2,false);
-  g.ellipse(0,0,Math.abs(1-2*k)*R,R,0,Math.PI/2,-Math.PI/2,k<.5);
-  g.fill();g.restore();
+  const warm=1-smooth(4*DEG,18*DEG,moonPt.alt);   // warmer low in the sky
+  const im=moonImage(R,moonPt.illum,moonPt.lit,moonPt.north,warm),s=im.width/dpr;
+  g.globalAlpha=night;g.drawImage(im,x-s/2,y-s/2,s,s);g.globalAlpha=1;
 }
 
 /* ---------------- shooting stars ---------------- */
@@ -536,7 +569,7 @@ function drawSkyGL(fireGlow){
   gl.uniform1f(U.uK,K/DEG);gl.uniform1f(U.uLat,LAT);gl.uniform1f(U.uLst,L);
   gl.uniform1f(U.uStarOff,scrolled*PAR.stars);gl.uniform1f(U.uFireOff,scrolled*PAR.fire);gl.uniform1f(U.uFarOff,scrolled*PAR.far);gl.uniform1f(U.uNearOff,scrolled*PAR.near);
   gl.uniform1f(U.uMoonLight,moonLight);
-  const m=moonPt&&moonPt.up?[moonPt.xy[0],moonPt.xy[1]+scrolled*PAR.stars,Math.max(5,.26*K*3)]:[0,0,0];gl.uniform3f(U.uMoon,m[0],m[1],m[2]);
+  const m=moonPt&&moonPt.up?[moonPt.xy[0],moonPt.xy[1]+scrolled*PAR.stars,moonR()]:[0,0,0];gl.uniform3f(U.uMoon,m[0],m[1],m[2]);
   gl.drawArrays(gl.TRIANGLES,0,3);
 }
 

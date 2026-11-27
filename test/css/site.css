@@ -348,7 +348,7 @@ img.rv-fade{animation:rv-fade .4s ease both}
 /* Theme switch: elements keep their own transitions off while the palette fades on the root (see the @property block). */
 html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:none!important}
 /* Pre-order, desktop: the heading and price stand alone at the top left; below them the note and the details
-   (Blank, Pickup, Shipping) share a row, lined up on their first line of text; the size slider and button sit under the note. */
+   (Blank, Pickup, Orders) share a row, lined up on their first line of text; the size slider and button sit under the note. */
 @media (min-width:900px){
   .order-sec{grid-template-areas:"h ." "spec ." "sub details" "form details" "links details";grid-template-rows:auto auto auto auto 1fr;row-gap:0}
   .order-sec .stack-head{display:contents}

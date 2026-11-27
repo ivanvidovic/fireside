@@ -33,7 +33,7 @@ let shirt=null;
 // An analog control with one detent per size. The radios remain the real input: the slider
 // writes to them, and keyboard changes on them move the slider.
 function installSizeSlider(form){
-  // Evenly spaced positions, S at the far left through 3XL at the far right. Before a size is
+  // Evenly spaced positions, S at the far left through 2XL at the far right. Before a size is
   // chosen the pill rests on S, wider, reading "Size →"; the first grab turns it into S.
   const el=form.querySelector('.slider'),handle=el.querySelector('.handle'),label=handle.querySelector('.handle-label');
   const radios=[...form.querySelectorAll('input[name=size]')],SIZES=radios.map(r=>r.value),N=SIZES.length;
