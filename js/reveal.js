@@ -72,6 +72,14 @@ const gio=new IntersectionObserver(es=>{for(const e of es){
   if(e.isIntersecting){if(e.target._gl)glitchPause(e.target,true);else glitchStart(e.target);}else glitchPause(e.target,false);
 }},{rootMargin:'200px 0px'});
 
+// Fallback: show the image as is (still loading or not), with no reveal.
+function showPlain(img){
+  img._done=true;gio.unobserve(img);glitchEnd(img);
+  img.classList.remove('rv-wait');img.style.clipPath='';img.style.backgroundColor='';
+}
+// Still failing after the retry: keep the box at its average colour instead of a broken-image icon.
+// A theme switch sets a fresh src, which loads normally if the connection is back.
+function gaveUp(img){img.style.backgroundColor='var(--avg)';img.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';}
 function play(img){
   img._done=true;
   if(reduced){img.classList.add('rv-fade');img.classList.remove('rv-wait');setTimeout(()=>{glitchEnd(img);img.style.backgroundColor='';},400);gio.unobserve(img);return;}
@@ -120,8 +128,17 @@ const io=new IntersectionObserver(es=>{
   for(const e of hits){
     io.unobserve(e.target);
     const img=e.target,slot=Math.max(now,nextSlot);nextSlot=slot+vary(STAGGER,.5)*1000;
-    const go=()=>img.decode().catch(()=>{}).then(()=>setTimeout(()=>play(img),Math.max(0,slot-performance.now())));
-    img.complete?go():img.addEventListener('load',go,{once:true});
+    const go=()=>{if(img._done)return;img.decode().catch(()=>{}).then(()=>setTimeout(()=>{if(!img._done)play(img);},Math.max(0,slot-performance.now())));};
+    if(img.complete&&img.naturalWidth)go();
+    else{
+      img.addEventListener('load',go,{once:true});
+      // A load that fails is retried once; one that never finishes is shown without the reveal, so no box stays empty.
+      let retried=false;
+      const failed=()=>{if(img._done)return;if(!retried){retried=true;const s=img.getAttribute('src');img.setAttribute('src',s+(s.includes('?')?'&':'?')+'retry=1');}else{showPlain(img);gaveUp(img);}};
+      img.addEventListener('error',failed);
+      if(img.complete&&!img.naturalWidth)failed();   // already broken before we got here
+      setTimeout(()=>{if(!img._done)showPlain(img);},8000);
+    }
   }
 },{rootMargin:'0px 0px -10% 0px'});
 
