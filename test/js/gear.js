@@ -220,7 +220,7 @@ function installSizeMagic(form){
 // Measured at rest in ORB's square framing box S: collar .149·S, hem .917·S, width about .62·S.
 const COLLAR=.149,HEM=.917,WIDE=.66,GAP_TOP=16,GAP_BOTTOM=64;
 const banner=stage.closest('.banner'),header=document.querySelector('.top');
-const isPhone=()=>matchMedia('(max-width:899px)').matches;   // stacked layout (tablets and phones)
+const isPhone=()=>matchMedia('(max-width:899px) and (orientation:portrait),(max-width:899px) and (min-height:501px)').matches;   // stacked layout (tablets, upright phones); sideways phones go side by side
 const isSmall=()=>matchMedia('(max-width:599px)').matches;   // phones: whole shirt, cropped above the text
 // Starting zoom: phones show the whole shirt; wider layouts start closer, on the full back print.
 const startZoom=()=>isSmall()?1:isPhone()?1.4:1.9;

@@ -11,7 +11,8 @@
   --ease:cubic-bezier(.22,.61,.36,1);
   --stage-h:clamp(300px,30vw,440px);   /* banner stage height, shared by every page */
   --max:1280px;
-  --gutter:max(var(--pad),calc((100% - var(--max)) / 2));   /* content edges: capped width, centered */
+  --safe:max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px));   /* iPhones held sideways: room for the camera island (0 elsewhere) */
+  --gutter:max(calc(var(--pad) + var(--safe)),calc((100% - var(--max)) / 2));   /* content edges: capped width, centered, clear of the island */
 }
 /* Theme switch: the palette itself fades, so every color on the page (gradients and glass included) moves together
    on one clock. Nothing is snapshotted, so the live shirt is never frozen or doubled. */
@@ -350,7 +351,7 @@ img.rv-fade{animation:rv-fade .4s ease both}
 html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:none!important}
 /* Pre-order, desktop: the heading and price stand alone at the top left; below them the note and the details
    (Blank, Pickup, Orders) share a row, lined up on their first line of text; the size slider and button sit under the note. */
-@media (min-width:900px){
+@media (min-width:900px),(orientation:landscape) and (max-height:500px){
   .order-sec{grid-template-areas:"h ." "spec ." "sub details" "form details" "links details";grid-template-rows:auto auto auto auto 1fr;row-gap:0}
   .order-sec .stack-head{display:contents}
   .order-sec .h2{grid-area:h}
@@ -373,6 +374,9 @@ html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:
   .text-link span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .icon{width:44px;height:44px}
   .top .icons .icon+.icon{margin-left:-8px}
+}
+/* Stacked layout: phones held upright and tablets. Phones held sideways use the side-by-side layout (below). */
+@media (max-width:899px) and (orientation:portrait),(max-width:899px) and (min-height:501px){
   .banner{grid-template-columns:minmax(0,1fr);padding-top:calc(var(--header) + 24px);padding-bottom:40px;gap:32px}
   /* Tablets: glass behind the banner text (same as the header), so the shirt blurs behind it. */
   .banner:has(.shirt-stage) .lead::before{content:"";position:absolute;z-index:-1;pointer-events:none;top:-32px;bottom:-40px;left:calc(-1 * var(--gutter));right:calc(-1 * var(--gutter));
@@ -409,6 +413,26 @@ html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:
   #details{padding-top:24px}   /* phones: same space under the divider as the strip and the Chain Reaction ad above */
   .gallery{grid-template-columns:1fr}
   .details div{grid-template-columns:minmax(0,1fr);gap:4px}
+}
+/* Phones held sideways (any width, short screen): the desktop side-by-side layouts, sized from the visible height
+   so each banner fits on one screen. */
+@media (orientation:landscape) and (max-height:500px){
+  :root{--header:56px;--stage-h:max(180px,calc(100svh - var(--header) - 76px))}
+  /* Meetups: slides fill the screen under the header, dots in the bottom space */
+  .show .banner{padding-top:20px;padding-bottom:56px}
+  .tag-slide{height:calc(20px + var(--stage-h) + 56px);padding-top:20px;padding-bottom:56px}
+  .dots{bottom:22px}
+  .show .title{font-size:clamp(28px,9svh,44px)}
+  .show .line{font-size:1.05rem;margin-bottom:12px}
+  .show .cta{height:48px}
+  .strip{padding-top:12px;padding-bottom:14px}
+  /* Gear: text left, the shirt filling the right half from the header down */
+  .banner:has(.shirt-stage){padding-top:calc(var(--header) + 16px);padding-bottom:24px}
+  .banner>.shirt-stage{height:calc(100svh - var(--header) - 40px)}
+  .banner:has(.shirt-stage) h1{font-size:clamp(34px,11svh,56px)}
+  .hint{bottom:6px}
+  .stack{padding-top:32px;padding-bottom:40px}
+  .gallery{padding-bottom:40px}
 }
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
