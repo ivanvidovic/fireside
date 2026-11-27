@@ -17,9 +17,9 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: 20}
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: {node-version: 24}
       - name: Refresh snapshot from Luma
         run: |
           cp data/meetups.json "$RUNNER_TEMP/old.json" 2>/dev/null || echo '{"events":[]}' > "$RUNNER_TEMP/old.json"
