@@ -1,6 +1,7 @@
 // Gear page: the live 3D shirt on the banner stage, the size slider, and checkout.
 import {CONFIG} from './config.js';
 import {theme} from './common.js';
+import {drawEmber} from './ember.js';
 
 const root=document.documentElement;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -17,7 +18,7 @@ let shirt=null;
   const urls=new Map([...links.querySelectorAll('a[data-size]')].map(a=>[a.dataset.size,a.href]));
   const size=()=>new FormData(form).get('size');
   links.hidden=true;form.hidden=false;form.noValidate=true;   // the slider nudge replaces the browser's bubble
-  const slider=installSizeSlider(form);
+  const slider=installSizeSlider(form);installSizeMagic(form);
   const buy=form.querySelector('.buy');
   const ready=()=>buy.setAttribute('aria-disabled',size()?'false':'true');
   form.addEventListener('change',()=>{status.textContent='';ready();});ready();
@@ -129,6 +130,86 @@ function installSizeSlider(form){
     },4200);
   }
   return {nudge};
+}
+
+/* ---------------- size chosen: embers and a wake-up ---------------- */
+// Embers burst off the pill where it lands (the same embers as the Meetups fire, js/ember.js), and the
+// Pre-order button wakes with one sweep of light. A new choice restarts the sweep. Off with reduced motion.
+function installSizeMagic(form){
+  if(reduced)return;
+  const el=form.querySelector('.slider'),buy=form.querySelector('.buy'),radios=[...form.querySelectorAll('input[name=size]')];
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  let wakeTimer=0;
+  // embers: one canvas over the order area, alive only while sparks are in the air
+  const cv=document.createElement('canvas');cv.className='size-sparks';cv.setAttribute('aria-hidden','true');document.body.append(cv);
+  const g=cv.getContext('2d');let sparks=[],raf=0,last=0,box=null;
+  const UP=240,SIDE=170,DOWN=90;   // room round the slider for the sparks to burst and rise into
+  function place(){
+    const r=el.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1),was=box;
+    // kept inside the page's width: a canvas poking past the edge would widen the page (phones then zoom out)
+    const vw=document.documentElement.clientWidth,x0=Math.max(0,r.left-SIDE),x1=Math.min(vw,r.right+SIDE);
+    box={left:x0+scrollX,top:r.top+scrollY-UP,w:x1-x0,h:UP+r.height+DOWN,dpr};
+    Object.assign(cv.style,{left:box.left+'px',top:box.top+'px',width:box.w+'px',height:box.h+'px'});
+    cv.width=Math.round(box.w*dpr);cv.height=Math.round(box.h*dpr);
+    if(was)for(const e of sparks){e.x+=was.left-box.left;e.y+=was.top-box.top;}   // sparks in the air keep their place on the page
+  }
+  // The burst: embers leave from all round the pill's outline, pushed outward, then each curves into its own
+  // rise (own speed, lean and wobble, a third of them curling for a moment) and dies at its own point.
+  function spark(px,py,pw,ph){
+    const r=ph/2,straight=Math.max(0,pw-ph),per=2*straight+2*Math.PI*r;
+    for(let i=0,n=Math.round(rnd(18,26));i<n;i++){
+      // a random point on the outline of the pill (a stadium), and the way out from it
+      let d=Math.random()*per,x,y,nx,ny;
+      if(d<straight){x=px-straight/2+d;y=py-r;nx=0;ny=-1;}
+      else if((d-=straight)<Math.PI*r){const a=-Math.PI/2+d/r;nx=Math.cos(a);ny=Math.sin(a);x=px+straight/2+nx*r;y=py+ny*r;}
+      else if((d-=Math.PI*r)<straight){x=px+straight/2-d;y=py+r;nx=0;ny=1;}
+      else{d-=straight;const a=Math.PI/2+d/r;nx=Math.cos(a);ny=Math.sin(a);x=px-straight/2+nx*r;y=py+ny*r;}
+      const hero=Math.random()<.1,size=hero?rnd(2,2.8):Math.pow(Math.random(),1.6)*1.6+.6,out=rnd(90,260);
+      const lazy=Math.random()<.15,flick=Math.random()<.1;
+      const e={x,y,vx:nx*out+rnd(-20,20),vy:ny*out+rnd(-20,20),T:1,age:-rnd(0,.12),size,hero,
+        life:flick?rnd(.4,.7):lazy?rnd(.8,1.6):rnd(.6,2.8),
+        rise:lazy?rnd(5,15):rnd(20,95),lean:rnd(-28,28),push:rnd(2.5,5),drag:rnd(1.2,2.6)/(.6+size*.35),
+        wa:rnd(6,18),wf:rnd(.02,.06),ws:rnd(.8,2.4),seed:Math.random()*100,f1:rnd(6,14),f2:rnd(2,5)};
+      if(Math.random()<.33)e.sw={at:rnd(.2,.9),dur:rnd(.4,1),rate:rnd(5,10)*(Math.random()<.5?-1:1),amp:rnd(25,70),ph:Math.random()*6.3};
+      sparks.push(e);
+    }
+    if(!raf){last=performance.now();raf=requestAnimationFrame(step);}
+  }
+  function step(now){
+    const dt=Math.min(.05,(now-last)/1000),t=now/1000;last=now;
+    const light=document.documentElement.dataset.scheme==='light';
+    g.setTransform(box.dpr,0,0,box.dpr,0,0);g.clearRect(0,0,box.w,box.h);
+    g.globalCompositeOperation=light?'source-over':'lighter';g.lineCap='round';
+    const keep=[];
+    for(const e of sparks){
+      e.age+=dt;if(e.age<0){keep.push(e);continue;}   // not out yet
+      e.T-=dt/e.life;if(e.T<=0||e.y<-20)continue;
+      // after the outward push, each settles into its own rise, lean and wobble (and maybe a brief curl)
+      const wob=Math.sin(e.y*e.wf+t*e.ws+e.seed)*e.wa+Math.sin(t*e.ws*1.7+e.seed*3)*e.wa*.4;
+      let tx=e.lean+wob,ty=-(e.rise*(.4+.6*e.T)+15);
+      if(e.sw){const u=(e.age-e.sw.at)/e.sw.dur;if(u>0&&u<1){const env=Math.sin(Math.PI*u),th=e.sw.rate*(e.age-e.sw.at)+e.sw.ph;tx+=Math.cos(th)*e.sw.amp*env;ty+=Math.sin(th)*e.sw.amp*env;}}
+      const k=1-Math.exp(-dt*(e.age<.35?e.push:e.drag));e.vx+=(tx-e.vx)*k;e.vy+=(ty-e.vy)*k;e.x+=e.vx*dt;e.y+=e.vy*dt;
+      const fl=.72+.28*(.5+.5*Math.sin(t*e.f1+e.seed))*(.5+.5*Math.sin(t*e.f2+e.seed*2));
+      const a=Math.min(1,e.age*8)*Math.min(1,e.T/.3)*fl;
+      if(a>.01)drawEmber(g,e,a,light?.6:1,light?.45:0);   // on a light page they start orange, or they'd vanish
+      keep.push(e);
+    }
+    sparks=keep;
+    raf=sparks.length?requestAnimationFrame(step):0;
+    if(!raf)g.clearRect(0,0,box.w,box.h);
+  }
+  form.addEventListener('change',e=>{
+    const i=radios.indexOf(e.target);if(i<0)return;
+    clearTimeout(wakeTimer);buy.classList.remove('wake');
+    const ticks=[...el.querySelectorAll('.tick')];if(!ticks[i])return;
+    place();
+    // where the pill lands: centred on the chosen notch
+    const tr=ticks[i].getBoundingClientRect(),hr=el.querySelector('.handle').getBoundingClientRect();
+    spark(tr.left+tr.width/2+scrollX-box.left,hr.top+hr.height/2+scrollY-box.top,hr.width,hr.height);
+    // then the button wakes
+    wakeTimer=setTimeout(()=>{buy.classList.remove('wake');void buy.offsetWidth;buy.classList.add('wake');setTimeout(()=>buy.classList.remove('wake'),900);},260);
+  });
+  addEventListener('resize',()=>{if(raf)place();});
 }
 
 /* ---------------- shirt framing ---------------- */

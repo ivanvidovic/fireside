@@ -72,11 +72,11 @@ function card(e,i){
     else{q('.ds-day').textContent=String(d.getUTCDate()).padStart(2,'0');
       q('.long').textContent=UTC({weekday:'long'}).format(d);q('.short').textContent=UTC({weekday:'short'}).format(d);}
   }else{
-    q('.ev-label').textContent='Next meetup';q('.ev-title').textContent='To be announced';
-    q('.ev-line').textContent='New dates land on Luma first.';
+    q('.ev-label').textContent='Upcoming';q('.ev-title').textContent='Next meetup coming soon';
+    q('.ev-line').textContent='Upcoming events will be listed here. Follow us on Luma to hear first.';
     const cta=q('.ev-cta');cta.href=LUMA;cta.target='_blank';cta.rel='noopener';
-    cta.querySelector('span').textContent='Get notified on Luma';cta.querySelector('i').textContent='↗';
-    q('.ds-mon').textContent='Next';const day=q('.ds-day');day.classList.add('tba');day.setAttribute('aria-label','TBA');day.innerHTML=TBA_SVG;
+    cta.querySelector('span').textContent='Follow on Luma';cta.querySelector('i').textContent='↗';
+    q('.ds-mon').textContent='Soon';const day=q('.ds-day');day.classList.add('tba');day.setAttribute('aria-label','TBA');day.innerHTML=TBA_SVG;
     q('.long').textContent='Portland';q('.short').textContent='PDX';
   }
   return n;

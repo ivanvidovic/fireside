@@ -330,6 +330,7 @@ html.holding .handle{cursor:grabbing}
 /* Captions sit under their image, in the site's small pixel label style. */
 figcaption{padding-top:10px;font:400 .66rem/1.2 var(--pixel);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 
+.foot p+p{margin-top:6px}
 .foot{text-align:center;padding-top:24px;padding-bottom:calc(40px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);color:var(--muted);font-family:var(--pixel);font-size:.82rem}
 
 /* ---------- phones and narrow windows ---------- */
@@ -417,3 +418,15 @@ html.theme-swap *,html.theme-swap *::before,html.theme-swap *::after{transition:
 .contact-menu button{all:unset;cursor:pointer;padding:9px 12px;border-radius:999px;white-space:nowrap;touch-action:manipulation}
 .contact-menu button:hover{background:var(--btn-hover)}
 .contact-menu button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* Size chosen (js/gear.js): ember sparks over the order area, and the Pre-order button's wake-up sweep
+   (plain white on the dark day-theme button, added light on the light night-theme button). */
+.size-sparks{position:absolute;z-index:4;pointer-events:none}
+.buy{position:relative;overflow:hidden}
+.buy::after{content:"";position:absolute;inset:0;pointer-events:none;transform:translateX(-110%);
+  background:linear-gradient(100deg,transparent 25%,rgba(255,255,255,.3) 50%,transparent 75%)}
+:root:not([data-scheme=light]) .buy::after{mix-blend-mode:plus-lighter;background:linear-gradient(100deg,transparent 25%,rgba(255,255,255,.55) 50%,transparent 75%)}   /* light button (night): added light */
+.buy.wake::after{animation:buy-sweep .75s cubic-bezier(.3,.6,.2,1)}
+.buy.wake>span:last-child{animation:buy-nudge .5s cubic-bezier(.3,.6,.2,1)}
+@keyframes buy-sweep{to{transform:translateX(110%)}}
+@keyframes buy-nudge{40%{transform:translate(3px,-3px)}}
+@media (prefers-reduced-motion:reduce){.buy.wake::after,.buy.wake>span:last-child{animation:none}}

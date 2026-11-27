@@ -1,11 +1,12 @@
 // Meetups banner sky. One sky with a time of day: 0 = day, 1 = night. The theme toggle walks it through dusk or
 // dawn (about 2.5 s); the banner's text colours follow the sky, so they stay readable the whole way.
 // Night is the real sky over Portland looking north, right now: catalogue stars, the Milky Way along its real path,
-// the Moon at its real place and phase, the planets, and shooting stars that follow the real meteor showers.
+// the planets, and shooting stars that follow the real meteor showers.
 // A fire just below the frame (bottom centre) sends up embers. Day: blue sky, two layers of drifting cloud.
 // The cursor moves the air like JM Joints' snow (a push plus a wake of alternating swirls): embers ride it,
 // and it drags and curls the near cloud, which settles back afterwards. Scrolling gives depth: stars far, fire near.
-import {DEG,LAT,lst,horiz,moon,sun,planets,showers,bvRGB} from './astro.js';
+import {DEG,LAT,lst,horiz,planets,showers,bvRGB} from './astro.js';
+import {heat,glowSprite as glowSprite_} from './ember.js';
 
 const root=document.documentElement;
 const sky=document.querySelector('.sky');
@@ -45,10 +46,10 @@ function size(){
   if(wiped&&started)redraw();else wake();
 }
 
-/* ---------------- the real sky: catalogue stars, planets, moon ---------------- */
+/* ---------------- the real sky: catalogue stars, planets ---------------- */
 // Stars to magnitude 7.5 (HYG database, CC BY-SA 4.0; see assets/sky/README.txt). Naked-eye stars (to 6) are drawn
 // one by one, shimmering; the fainter dust of stars is drawn to its own layer whenever the sky has turned a little.
-let catalog=null,faintCat=[],starPts=[],planetPts=[],moonPt=null,L=0,lastPlace=0;
+let catalog=null,faintCat=[],starPts=[],planetPts=[],L=0,lastPlace=0;
 const faintLayer=document.createElement('canvas'),fg=faintLayer.getContext('2d');
 fetch(new URL('../assets/sky/stars.json',import.meta.url)).then(r=>r.json()).then(a=>{
   const cat=[],faint=[];
@@ -78,24 +79,12 @@ function place(force){
     fg.fillStyle=`rgba(${s.rgb[0]},${s.rgb[1]},${s.rgb[2]},${a.toFixed(3)})`;fg.fillRect(x,y,px*1.4,px*1.4);
   }
   planetPts=planets(now).map(p=>{const [alt,az]=horiz(p.ra,p.dec,L);return alt>0?{xy:toScreen(alt,az),p}:null;}).filter(Boolean);
-  const m=moon(now);let [alt,az]=horiz(m.ra,m.dec,L);alt-=.95*DEG*Math.cos(alt);   // the Moon is close: parallax lowers it ~1°
-  const sn=sun(now),[sAlt,sAz]=horiz(sn.ra,sn.dec,L);
-  // which way its lit side faces on screen: toward the Sun along the sky
-  const dir=(a1,z1,a2,z2)=>{const p=toScreen(a1,z1),q=toScreen(a1+(a2-a1)*.01,z1+(((z2-z1+3*Math.PI)%(2*Math.PI))-Math.PI)*.01);return Math.atan2(q[1]-p[1],q[0]-p[0]);};
-  // which way its north points on screen (its face is set by the sky's north, as seen from here at this hour)
-  const [nAlt,nAz]=horiz(m.ra,m.dec+.01,L),p0=toScreen(alt,az),p1=toScreen(nAlt-.95*DEG*Math.cos(nAlt),nAz);
-  moonPt={xy:p0,alt,illum:m.illum,lit:dir(alt,az,sAlt,sAz),north:Math.atan2(p1[1]-p0[1],p1[0]-p0[0]),up:alt>-.01};
-  moonLight=moonPt.up?m.illum*clamp(Math.sin(alt)*2,0,1):0;   // moonlight fills the whole sky, in view or not
 }
-let moonLight=0;
-const moonR=()=>Math.max(6,.26*K*4);   // drawn at 4× its true size (0.26° radius), so its face and phase read
-// How bright the sky is behind the stars: full daylight 1, a dark night 0, plus moonlight (more near the Moon).
+// How bright the sky is behind the stars: full daylight 1, a dark night 0.
 // A star shows when it's brighter than that: the faintest visible magnitude follows the sky continuously,
 // so at dusk the brightest appear first and every star keeps brightening as the sky darkens.
 function skyB(x,y){
-  let B=Math.pow(1-ease(tod),3)+moonLight*.00008;
-  if(moonPt&&moonPt.up){const d=Math.hypot(x-moonPt.xy[0],y-moonPt.xy[1]);B+=moonLight*.004*Math.exp(-d/(moonR()*8));}
-  return B;
+  return Math.pow(1-ease(tod),3);
 }
 const limMag=B=>6.4-2.5*Math.log10(1+B*14500);
 function drawStars(dt){
@@ -106,8 +95,8 @@ function drawStars(dt){
   const fa=smooth(5.2,6.6,lim0);if(fa>0){g.globalAlpha=fa;g.drawImage(faintLayer,0,0,W,H);g.globalAlpha=1;}
   for(const p of starPts){
     const s=p.s;
-    // fainter stars need a darker sky: they come out last at dusk and fade first in moonlight
-    const mag=s.mag+(1-p.ext)*1.2,lim=moonPt&&moonPt.up?limMag(skyB(p.x,p.y)):lim0;   // low stars dim through more air
+    // fainter stars need a darker sky: they come out last at dusk
+    const mag=s.mag+(1-p.ext)*1.2,lim=lim0;   // low stars dim through more air
     if(mag>lim)continue;
     let a=Math.pow(clamp((lim-mag)/2.4,0,1),1.15)*clamp(1.3-s.mag*.15,.24,1);
     if(a<.02)continue;
@@ -122,52 +111,8 @@ function drawStars(dt){
     const r=Math.max(.9,1.9-q.p.mag*.22),a=Math.min(1,.85+(-q.p.mag)*.05)*clamp((lim0-q.p.mag)/2.4,0,1);if(a<=0)continue;
     g.fillStyle=`rgba(${q.p.rgb[0]},${q.p.rgb[1]},${q.p.rgb[2]},${a.toFixed(3)})`;g.beginPath();g.arc(q.xy[0],q.xy[1],r,0,6.283);g.fill();
   }
-  if(moonPt&&moonPt.up)drawMoon(smooth(.35,.75,ease(tod)));
   g.restore();
 }
-// The Moon, drawn in code: a lit sphere at its real phase, with the near side's dark seas where they really are,
-// light mottling, bright Tycho and Copernicus, soft limbs and terminator, faint earthshine on the unlit part, and a
-// warmer tint low in the sky. Rendered once to a small image and only redrawn when something about it changes.
-const MARIA=[   // selenographic longitude, latitude, radius (degrees), depth
-  [-57,18,24,.5],[-16,33,13,.55],[17,28,9,.55],[31,8,11,.55],[59,17,6,.6],[51,-8,9,.45],[35,-15,5,.45],[-17,-21,9,.45],
-  [-39,-24,5,.45],[-23,-10,6,.4],[-31,7,7,.4],[4,13,4,.4],[-10,56,7,.35],[15,56,6,.35],[-35,52,5,.3]];
-const CRATERS=[[-11,-43,2.2,.55],[-20,10,1.6,.35],[-38,8,1.3,.25]];   // Tycho, Copernicus, Kepler: brighter
-let moonImg=null,moonKey='';
-function moonImage(R,k,lit,north,warm){
-  const key=[R.toFixed(1),k.toFixed(3),lit.toFixed(2),north.toFixed(2),warm.toFixed(2),dpr].join();
-  if(key===moonKey)return moonImg;moonKey=key;
-  const n=Math.ceil((R+1)*2*dpr),c=moonImg||document.createElement('canvas');c.width=c.height=n;
-  const x=c.getContext('2d'),img=x.createImageData(n,n),d=img.data,rr=R*dpr,cx=n/2;
-  const ph=2*k-1,sn=Math.sqrt(Math.max(0,1-ph*ph)),S=[Math.cos(lit)*sn,Math.sin(lit)*sn,ph];   // the Sun, as seen from the Moon
-  const fa=north+Math.PI/2,cf=Math.cos(fa),sf=Math.sin(fa);   // turn the face so its north points along the sky's
-  const base=[246-8*warm,240-22*warm,226-48*warm];
-  for(let py=0;py<n;py++)for(let px=0;px<n;px++){
-    const u=(px+.5-cx)/rr,v=(py+.5-cx)/rr,r2=u*u+v*v;if(r2>1.04)continue;
-    const z=Math.sqrt(Math.max(0,1-r2)),edge=clamp((1.02-Math.sqrt(r2))/.04,0,1);   // a soft rim
-    // selenographic coordinates: north up, east to the right as seen
-    const fu=u*cf+v*sf,fv=-u*sf+v*cf,lat=Math.asin(clamp(-fv,-1,1))/DEG,lon=Math.atan2(fu,z)/DEG;
-    let alb=1;
-    for(const [mx,my,mr,dp] of MARIA){const dl=(lon-mx)*Math.cos(lat*DEG),db=lat-my,q=(dl*dl+db*db)/(mr*mr);if(q<5)alb-=dp*.7*Math.exp(-q*.9);}   // soft-edged seas
-    for(const [mx,my,mr,dp] of CRATERS){const dl=(lon-mx)*Math.cos(lat*DEG),db=lat-my,q=(dl*dl+db*db)/(mr*mr);if(q<9)alb+=dp*Math.exp(-q);}
-    alb+=(Math.sin(lon*.9+lat*1.3)*Math.sin(lat*1.1-lon*.6)+Math.sin(lon*2.3-lat*1.9)*.5)*.035;   // light mottling
-    alb=clamp(alb,.38,1.25);
-    const lam=u*S[0]+v*S[1]+z*S[2],lightK=smooth(-.06,.12,lam)*(.72+.28*Math.sqrt(Math.max(0,lam)));   // soft terminator
-    const limb=.78+.22*z;   // a little darker toward the rim
-    const lum=Math.max(lightK*alb*limb,.055*alb*(1-lightK));   // earthshine on the unlit part
-    const i=(py*n+px)*4,cool=1-lightK;
-    d[i]=clamp(base[0]*lum*(1-.08*cool),0,255);d[i+1]=clamp(base[1]*lum,0,255);d[i+2]=clamp(base[2]*lum*(1+.25*cool),0,255);
-    d[i+3]=255*edge*clamp(lum*4,0,1);
-  }
-  x.putImageData(img,0,0);moonImg=c;return c;
-}
-function drawMoon(night){
-  const [x,y]=moonPt.xy,R=moonR();
-  if(x<-R||x>W+R||y<-R)return;
-  const warm=1-smooth(4*DEG,18*DEG,moonPt.alt);   // warmer low in the sky
-  const im=moonImage(R,moonPt.illum,moonPt.lit,moonPt.north,warm),s=im.width/dpr;
-  g.globalAlpha=night;g.drawImage(im,x-s/2,y-s/2,s,s);g.globalAlpha=1;
-}
-
 /* ---------------- shooting stars ---------------- */
 const meteors=[];let nextMeteor=rnd(8,30);
 function launch(x,y,ang,speed,len,bright){
@@ -273,14 +218,8 @@ function air(x,y){   // screen coordinates (relative to the sky)
 }
 
 /* ---------------- the fire: embers, with the odd burst, swirl and breeze ---------------- */
-let embers=[],spawnAcc=0,glowBoost=0,nextBurst=rnd(12,40),breeze=0,breezeTo=0,nextBreeze=rnd(20,50),breezeHold=0;
-const glowSprite=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),r=x.createRadialGradient(32,32,0,32,32,32);
-  r.addColorStop(0,'rgba(255,190,110,.9)');r.addColorStop(.25,'rgba(255,120,40,.35)');r.addColorStop(1,'rgba(255,80,20,0)');x.fillStyle=r;x.fillRect(0,0,64,64);return c;})();
-function heat(T){   // white-yellow when fresh, through orange and deep red as it cools
-  const k=[[1,[255,244,214]],[.75,[255,196,96]],[.5,[255,128,40]],[.25,[214,62,18]],[0,[110,18,8]]];
-  for(let i=0;i<k.length-1;i++){const [t0,c0]=k[i],[t1,c1]=k[i+1];if(T>=t1){const f=(T-t1)/(t0-t1);return c1.map((v,j)=>Math.round(v+(c0[j]-v)*f));}}
-  return k[k.length-1][1];
-}
+let emberBurst=isDark(),pops=[],embers=[],spawnAcc=0,glowBoost=0,nextBurst=rnd(12,40),breeze=0,breezeTo=0,nextBreeze=rnd(20,50),breezeHold=0;
+const glowSprite=glowSprite_();
 function newEmber(burst){
   const hero=Math.random()<.07,s=hero?rnd(2,3.2):Math.pow(Math.random(),1.6)*1.8+.6,life=rnd(3.2,7.5)*(hero?.85:1);
   const e={x:W/2+(Math.random()+Math.random()+Math.random()-1.5)*W*(burst?.24:.16),y:H+rnd(4,30),vx:rnd(-12,12)*(burst?3:1),vy:burst?rnd(-280,-160):rnd(-80,-40),
@@ -288,8 +227,24 @@ function newEmber(burst){
     drag:rnd(1.4,3)/(.6+s*.35),seed:Math.random()*100,f1:rnd(6,14),f2:rnd(2,5),front:Math.random()<1/8};
   if(e.front)e.size*=1.5;   // closer: a little bigger (and softer, when drawn)
   // now and then one gets caught in a little eddy and spirals for a moment before rejoining the rise
-  if(Math.random()<.08)e.sw={at:rnd(.4,life*.5),dur:rnd(.5,1.2),rate:rnd(5,9)*(Math.random()<.5?-1:1),amp:rnd(45,90),ph:Math.random()*6.3};
+  if(Math.random()<.08)e.sw=[{at:rnd(.4,life*.5),dur:rnd(.5,1.2),rate:rnd(5,9)*(Math.random()<.5?-1:1),amp:rnd(45,90),ph:Math.random()*6.3}];
   return e;
+}
+// The night burst (page opening at night, or switching to night): the fire catches in a few pops, each from its
+// own spot, flinging embers on wide, crossing paths; about half of them curl, some twice, tight or lazy.
+function popEmbers(p){
+  glowBoost=Math.max(glowBoost,.8+.6*p.k);
+  const n=Math.round(rnd(12,20)*p.k*(small()?.5:1));
+  for(let i=0;i<n;i++){
+    const e=newEmber(true);
+    e.x=p.x*W+(Math.random()+Math.random()-1)*W*.07;e.vx=rnd(-110,110);e.vy=rnd(-340,-90);e.life=rnd(2,7);
+    if(Math.random()<.5){
+      const curl=()=>{const tight=Math.random()<.5;return {at:0,dur:tight?rnd(.4,.8):rnd(.9,1.6),rate:(tight?rnd(9,14):rnd(3.5,6))*(Math.random()<.5?-1:1),amp:tight?rnd(35,60):rnd(70,120),ph:Math.random()*6.3};};
+      const a=curl();a.at=rnd(.2,e.life*.4);e.sw=[a];
+      if(Math.random()<.35){const b=curl();b.at=a.at+a.dur+rnd(.3,1);if(b.at<e.life*.8)e.sw.push(b);}
+    }
+    embers.push(e);
+  }
 }
 // where the banner and strip text sit, in the sky's coordinates (for the front embers to fade over)
 let textEls=[],textAt=-1e9;
@@ -313,6 +268,10 @@ function stepEmbers(dt){
     // the odd gentle breeze leans the whole column for a few seconds
     nextBreeze-=dt;if(nextBreeze<=0){if(breezeTo===0){breezeTo=rnd(25,45)*(Math.random()<.5?-1:1);nextBreeze=rnd(3,5);}else{breezeTo=0;nextBreeze=rnd(25,70);}}
   }
+  // the page opening at night, or the theme switching to night: the fire sparks up once as the dark arrives
+  if(emberBurst&&!reduced&&night>.6){emberBurst=false;const now=performance.now()/1000,n=Math.round(rnd(3,5));
+    pops=Array.from({length:n},(_,i)=>({at:now+(i?rnd(.1,1.5):0),x:rnd(.2,.8),k:rnd(.6,1.4)})).sort((a,b)=>a.at-b.at);}
+  while(pops.length&&pops[0].at<=performance.now()/1000)popEmbers(pops.shift());
   glowBoost*=Math.exp(-dt/1.4);breeze+=(breezeTo-breeze)*(1-Math.exp(-dt/1.2));
   const want=(small()?40:85)*night;
   if(!reduced&&want>1){spawnAcc+=dt*want/5;while(spawnAcc>=1){spawnAcc--;embers.push(newEmber(false));}}
@@ -323,8 +282,9 @@ function stepEmbers(dt){
     const a=air(e.x,e.y+(e.front?offF:off)),carry=1.45-e.size*.22;
     const turb=Math.sin(e.y*.012+t*1.3+e.seed)*26+Math.sin(e.y*.031-t*2.1+e.seed*3)*11+Math.sin(t*.7+e.seed*.5)*8;
     let tx=a[0]*carry+turb+breeze*(1.2-e.size*.2),ty=a[1]*carry-(35+120*e.T)*e.lift;
-    if(e.sw){const u=(e.age-e.sw.at)/e.sw.dur;if(u>0&&u<1){const env=Math.sin(Math.PI*u),th=e.sw.rate*(e.age-e.sw.at)+e.sw.ph;tx+=Math.cos(th)*e.sw.amp*env;ty+=Math.sin(th)*e.sw.amp*env;}}
-    const k=1-Math.exp(-dt*(e.sw&&e.age>e.sw.at&&e.age<e.sw.at+e.sw.dur?e.drag*2.2:e.drag));e.vx+=(tx-e.vx)*k;e.vy+=(ty-e.vy)*k;
+    let curling=false;
+    if(e.sw)for(const w of e.sw){const u=(e.age-w.at)/w.dur;if(u>0&&u<1){curling=true;const env=Math.sin(Math.PI*u),th=w.rate*(e.age-w.at)+w.ph;tx+=Math.cos(th)*w.amp*env;ty+=Math.sin(th)*w.amp*env;}}
+    const k=1-Math.exp(-dt*(curling?e.drag*2.2:e.drag));e.vx+=(tx-e.vx)*k;e.vy+=(ty-e.vy)*k;
     e.x+=e.vx*dt;e.y+=e.vy*dt;keep.push(e);
   }
   embers=keep;
@@ -479,8 +439,8 @@ function stepClouds(dt){
 let gl=null,prog=null,U={},quad=null,qloc=0;
 const SEED=[Math.random()*400,Math.random()*400];   // a new sky of clouds on every visit
 const FS=`precision highp float;
-uniform vec2 uRes,uCss;uniform float uT,uTod,uGlow,uK,uLat,uLst,uStarOff,uFireOff,uFarOff,uNearOff,uMoonLight;
-uniform vec3 uMoon;uniform sampler2D uMap;uniform float uHasMap,uStretchMin;uniform vec2 uSeed;
+uniform vec2 uRes,uCss;uniform float uT,uTod,uGlow,uK,uLat,uLst,uStarOff,uFireOff,uFarOff,uNearOff;
+uniform sampler2D uMap;uniform float uHasMap,uStretchMin;uniform vec2 uSeed;
 float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
   return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
@@ -513,11 +473,9 @@ void main(){
   vec3 col=mix(Hc,Z,pow(clamp(h,0.,1.),.6));
   float band=exp(-pow((e-.55)/.12,2.));col=mix(col,hex(192.,103.,154.),band*.35*exp(-pow((h-.3)/.22,2.)));
   float night=smoothstep(.6,1.,e);
-  col+=hex(70.,90.,130.)*uMoonLight*.12*night;   // moonlight lifts the whole sky a little
   float lc;float mw=milky(p,lc);
   vec3 mwc=mix(hex(150.,160.,180.),hex(215.,205.,185.),exp(-lc*lc/.6));
-  col+=mwc*mw*.34*night*(1.-.55*uMoonLight);
-  if(uMoon.z>0.){vec2 dm=p-uMoon.xy;col+=hex(200.,205.,225.)*exp(-length(dm)/(uMoon.z*7.))*.22*uMoonLight*night;}   // the Moon's halo
+  col+=mwc*mw*.34*night;
   // the fire just below the frame, bottom centre: an amber glow, like town light on a horizon
   vec2 fd=(p-vec2(uCss.x*.5,uCss.y*1.02+uFireOff))/vec2(uCss.x*.42,uCss.y*.55);
   col+=hex(255.,136.,52.)*exp(-dot(fd,fd)*2.)*.34*night*uGlow;
@@ -556,7 +514,7 @@ function initGL(){
   gl.useProgram(prog);
   quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
   qloc=gl.getAttribLocation(prog,'a');gl.enableVertexAttribArray(qloc);gl.vertexAttribPointer(qloc,2,gl.FLOAT,false,0,0);
-  for(const n of ['uRes','uCss','uT','uTod','uGlow','uK','uLat','uLst','uStarOff','uFireOff','uFarOff','uNearOff','uMoonLight','uMoon','uMap','uHasMap','uStretchMin','uSeed'])U[n]=gl.getUniformLocation(prog,n);
+  for(const n of ['uRes','uCss','uT','uTod','uGlow','uK','uLat','uLst','uStarOff','uFireOff','uFarOff','uNearOff','uMap','uHasMap','uStretchMin','uSeed'])U[n]=gl.getUniformLocation(prog,n);
   gl.uniform1i(U.uMap,0);fluidInit();
 }
 function drawSkyGL(fireGlow){
@@ -568,8 +526,6 @@ function drawSkyGL(fireGlow){
   gl.uniform1f(U.uT,reduced?40:t);gl.uniform1f(U.uTod,ease(tod));gl.uniform1f(U.uGlow,fireGlow);
   gl.uniform1f(U.uK,K/DEG);gl.uniform1f(U.uLat,LAT);gl.uniform1f(U.uLst,L);
   gl.uniform1f(U.uStarOff,scrolled*PAR.stars);gl.uniform1f(U.uFireOff,scrolled*PAR.fire);gl.uniform1f(U.uFarOff,scrolled*PAR.far);gl.uniform1f(U.uNearOff,scrolled*PAR.near);
-  gl.uniform1f(U.uMoonLight,moonLight);
-  const m=moonPt&&moonPt.up?[moonPt.xy[0],moonPt.xy[1]+scrolled*PAR.stars,moonR()]:[0,0,0];gl.uniform3f(U.uMoon,m[0],m[1],m[2]);
   gl.drawArrays(gl.TRIANGLES,0,3);
 }
 
@@ -625,7 +581,7 @@ addEventListener('fireside:stoke',()=>{
   glowBoost=1.6;const n=Math.round(rnd(25,40)*1.5*(small()?.5:1));for(let i=0;i<n;i++)embers.push(newEmber(true));
   slideBreeze={dir:1,t:-SLIDE_DELAY,gust:true};energy=1;dirty=true;wake();
 });
-addEventListener('fireside:theme',()=>{target=isDark()?1:0;if(!drawn)tod=target;wake();});
+addEventListener('fireside:theme',()=>{const was=target;target=isDark()?1:0;if(target&&!was)emberBurst=true;if(!target){emberBurst=false;pops=[];}if(!drawn)tod=target;wake();});
 setInterval(()=>{dirty=true;wake();},60000);   // with reduced motion, keep the sky turning once a minute
 
 initGL();
