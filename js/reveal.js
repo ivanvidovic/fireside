@@ -72,6 +72,13 @@ const gio=new IntersectionObserver(es=>{for(const e of es){
   if(e.isIntersecting){if(e.target._gl)glitchPause(e.target,true);else glitchStart(e.target);}else glitchPause(e.target,false);
 }},{rootMargin:'200px 0px'});
 
+// Safety net: if anything is still hiding the image (waiting, part-way clip, the reveal's canvas), show it as is.
+function finish(img){
+  if(!img.classList.contains('rv-wait')&&!img.style.clipPath&&!img._rvc)return;   // already shown properly
+  img._done=true;gio.unobserve(img);glitchEnd(img);
+  img._rvc?.remove();img._rvc=null;
+  img.classList.remove('rv-wait');img.style.clipPath='';img.style.background='';
+}
 // Fallback: show the image as is (still loading or not), with no reveal.
 function showPlain(img){
   img._done=true;gio.unobserve(img);glitchEnd(img);
@@ -88,7 +95,7 @@ function play(img){
   const dpr=Math.min(2,devicePixelRatio||1),c=document.createElement('canvas');
   c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);c.className='rv-canvas';
   Object.assign(c.style,{left:img.offsetLeft+'px',top:img.offsetTop+'px',width:w+'px',height:h+'px'});
-  img.before(c);   // under the image: the real picture scans in over the blocks
+  img.before(c);img._rvc=c;   // under the image: the real picture scans in over the blocks
   const statik=getComputedStyle(img).position==='static';if(statik)img.style.position='relative';
   const g=c.getContext('2d'),box=coverBox(img,w,h);
   // over the broken signal, the blocks sweep in; without it, they start from the average colour
@@ -103,7 +110,7 @@ function play(img){
   // this image's own pace: its three passes each a little faster or slower, so no two reveals run the same
   const dur=[vary(PASS,.3),vary(PASS,.3),vary(PASS,.3)],ends=[dur[0],dur[0]+dur[1],dur[0]+dur[1]+dur[2]];
   const t0=performance.now();
-  (function step(now){
+  (function step(now){try{
     const t=Math.max(0,(now-t0)/1000),pass=t<ends[0]?0:t<ends[1]?1:t<ends[2]?2:3,f=pass>2?1:Math.min(1,(t-(pass?ends[pass-1]:0))/dur[pass]);
     if(pass<2){
       const s=levels[pass],rows=Math.ceil(f*s.height);   // one block row at a time
@@ -114,8 +121,8 @@ function play(img){
       img.style.clipPath=`inset(0 0 ${Math.max(0,h-shown)}px 0)`;
     }
     if(pass<3)requestAnimationFrame(step);
-    else{img.style.clipPath='';img.style.background='';if(statik)img.style.position='';c.remove();glitchEnd(img);}
-  })(t0);
+    else{img.style.clipPath='';img.style.background='';if(statik)img.style.position='';c.remove();img._rvc=null;glitchEnd(img);}
+  }catch{finish(img);}})(t0);
 }
 
 // Images that come into view together don't all start at once: each takes the next slot, top to bottom, left to
@@ -128,7 +135,7 @@ const io=new IntersectionObserver(es=>{
   for(const e of hits){
     io.unobserve(e.target);
     const img=e.target,slot=Math.max(now,nextSlot);nextSlot=slot+vary(STAGGER,.5)*1000;
-    const go=()=>{if(img._done)return;img.decode().catch(()=>{}).then(()=>setTimeout(()=>{if(!img._done)play(img);},Math.max(0,slot-performance.now())));};
+    const go=()=>{if(img._done)return;Promise.race([img.decode().catch(()=>{}),new Promise(r=>setTimeout(r,1500))]).then(()=>setTimeout(()=>{if(!img._done)try{play(img);}catch{finish(img);}},Math.max(0,slot-performance.now())));};
     if(img.complete&&img.naturalWidth)go();
     else{
       img.addEventListener('load',go,{once:true});
@@ -137,8 +144,9 @@ const io=new IntersectionObserver(es=>{
       const failed=()=>{if(img._done)return;if(!retried){retried=true;const s=img.getAttribute('src');img.setAttribute('src',s+(s.includes('?')?'&':'?')+'retry=1');}else{showPlain(img);gaveUp(img);}};
       img.addEventListener('error',failed);
       if(img.complete&&!img.naturalWidth)failed();   // already broken before we got here
-      setTimeout(()=>{if(!img._done)showPlain(img);},8000);
     }
+    // whatever happened (a stalled decode, a reveal cut short, a theme switch mid-reveal), it's fully shown 8s after it came into view
+    setTimeout(()=>finish(img),8000);
   }
 },{rootMargin:'0px 0px -10% 0px'});
 

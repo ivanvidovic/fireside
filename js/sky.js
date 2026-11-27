@@ -158,8 +158,11 @@ function stepMeteors(dt){
   g.restore();
 }
 show.addEventListener('click',e=>{
-  if(e.target.closest('a,button')||tod<.7||reduced)return;
-  const r=sky.getBoundingClientRect();randomLaunch(e.clientX-r.left,e.clientY-r.top);wake();
+  if(e.target.closest('a,button')||reduced)return;
+  const r=sky.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  puff(x,y);
+  if(tod>=.7)randomLaunch(x,y);
+  wake();
 });
 
 /* ---------------- air: the cursor pushes it and sheds swirls (ported from JM Joints' snow) ---------------- */
@@ -208,8 +211,27 @@ function stepEdge(dt){
     while(eddies.length>32)eddies.shift();
   }
 }
+// A tap in the sky: a ring of air rushing out from the finger, fading as it spreads.
+const puffs=[];let cloudPuffs=[];
+function puff(x,y){
+  puffs.push({x,y,age:0,life:1.1});if(puffs.length>6)puffs.shift();
+  cloudPuffs.push([x,y]);
+}
+// Scrolling: the banner is dragged through the air, so the air lags it (sky coordinates, px/s).
+let scrollWind=0,lastScrolled=null;
+function stepScrollWind(dt){
+  if(lastScrolled===null||reduced){lastScrolled=scrolled;return;}
+  const v=(scrolled-lastScrolled)/Math.max(dt,1/120);lastScrolled=scrolled;
+  const want=Math.max(-320,Math.min(320,v*.55));
+  scrollWind+=(want-scrollWind)*(1-Math.exp(-dt*(Math.abs(want)>Math.abs(scrollWind)?14:3)));   // gusts in quickly, settles slowly
+}
 function air(x,y){   // screen coordinates (relative to the sky)
-  A[0]=0;A[1]=0;
+  A[0]=0;A[1]=scrollWind;
+  for(const p of puffs){
+    const dx=x-p.x,dy=y-p.y,d=Math.hypot(dx,dy)||1,a=p.age/p.life,ring=30+330*a,w=70+60*a;
+    const s=520*(1-a)*(1-a)*Math.exp(-((d-ring)**2)/(w*w));
+    A[0]+=dx/d*s;A[1]+=dy/d*s;
+  }
   for(const v of eddies)vortex(v,x,y,A);
   if(edge.on){const dx=Math.abs(x-edge.x),R=170;if(dx<R){const f=1-dx/R;A[0]+=edge.vx*f*f*f*.7;}}
   const dx=x-ptr.x,dy=y-ptr.y,d2=dx*dx+dy*dy,R=280;
@@ -402,6 +424,10 @@ function stepClouds(dt){
   // the cursor's gust: only fast movement, in its direction (cells/s), centred where it is on the near layer
   const sp=Math.hypot(ptr.vx,ptr.vy);
   if(sp>320&&ptr.x>-500){const k=(sp-320)/sp/SIM_PX*PUSH_K;forces.push([ptr.x/W,1-(ptr.y-off)/H,ptr.vx*k,-ptr.vy*k,PUSH_R]);}
+  // a tap: a burst of pushes outward round the point; scrolling: the whole sky's air lags the banner
+  for(const [x,y] of cloudPuffs)for(let i=0;i<8;i++){const a=i/8*Math.PI*2,k=PUSH_K*28/SIM_PX;forces.push([x/W+Math.cos(a)*.03,1-(y-off)/H-Math.sin(a)*.03*W/H,Math.cos(a)*k*60,Math.sin(a)*k*60,PUSH_R]);}
+  cloudPuffs=[];
+  if(Math.abs(scrollWind)>25){const f=-scrollWind/SIM_PX*PUSH_K*.35;for(const [x,y] of [[.25,.3],[.75,.3],[.25,.75],[.75,.75]])forces.push([x,y,0,f,.12]);}
   // a slide change: a little after it starts, a soft breeze builds across the sky in its direction and slowly
   // dies away (about 2.5 s), so the clouds drift a short way, unhurried, then settle
   if(edge.on&&!lastEdgeOn&&!(slideBreeze&&slideBreeze.gust)){slideBreeze={dir:Math.sign(edge.vx),t:-SLIDE_DELAY};}
@@ -552,8 +578,10 @@ function frame(now){
   const r=sky.getBoundingClientRect();skyRect={left:r.left,top:r.top};scrolled=Math.max(0,-r.top);
   const rate=1/(reduced?.5:2.5);if(tod!==target)tod=target>tod?Math.min(target,tod+dt*rate):Math.max(target,tod-dt*rate);
   for(const v of eddies)v.age+=dt;while(eddies.length&&eddies[0].age>eddies[0].life)eddies.shift();
+  for(const p of puffs)p.age+=dt;while(puffs.length&&puffs[0].age>puffs[0].life)puffs.shift();
+  stepScrollWind(dt);
   ptr.vx*=Math.exp(-dt*6);ptr.vy*=Math.exp(-dt*6);   // a still cursor stops pushing
-  stepEdge(dt);place(false);inks();stepClouds(dt);
+  stepEdge(dt);place(false);inks();stepClouds(dt);cloudPuffs=[];   // (at night there's no cloud air to push)
   const fireGlow=(reduced?1:.82+.1*Math.sin(t*1.7)+.06*Math.sin(t*4.3+1.3)+.04*Math.sin(t*9.1))*(1+.55*glowBoost);
   drawSkyGL(fireGlow);
   g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);gF.setTransform(dpr,0,0,dpr,0,0);gF.clearRect(0,0,W,H);
