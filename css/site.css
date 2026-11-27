@@ -330,6 +330,7 @@ html.holding .handle{cursor:grabbing}
 /* Captions sit under their image, in the site's small pixel label style. */
 figcaption{padding-top:10px;font:400 .66rem/1.2 var(--pixel);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 
+.foot p+p{margin-top:6px}
 .foot{text-align:center;padding-top:24px;padding-bottom:calc(40px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);color:var(--muted);font-family:var(--pixel);font-size:.82rem}
 
 /* ---------- phones and narrow windows ---------- */
